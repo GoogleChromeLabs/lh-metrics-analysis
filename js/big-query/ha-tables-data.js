@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import {getExtractedTableId} from './extract-from-ha-tables.js';
+
 /**
  * @fileoverview A class that lazily queries the available HTTPArchive
  * Lighthouse monthly tables.
@@ -21,16 +23,6 @@
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
 /** @typedef {Readonly<{year: number, month: number, tableId: string, extractedTableId: string}>} HaTableInfo */
-
-/**
- * Returns a standard extracted table ID for the given date. Month is
- * assumed to be in [1, 12], not [0, 11] as is usual in JS dates.
- * @param {{year: number, month: number}} tableInfo
- */
-function getExtractedTableId({year, month}) {
-  const paddedMonth = String(month).padStart(2, '0');
-  return `lh_extract_${year}_${paddedMonth}_01`;
-}
 
 export default class HaTablesData {
   /**
