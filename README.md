@@ -7,6 +7,16 @@ This is not an officially supported Google product.
 ### Setup
 
 - `yarn`
-- Enable BigQuery and setup a Google Cloud [service account](https://cloud.google.com/iam/docs/service-accounts)
+- Enable BigQuery and set up a Google Cloud [service account](https://cloud.google.com/iam/docs/service-accounts)
 - Download a [service account key](https://cloud.google.com/iam/docs/creating-managing-service-account-keys)
-- set [`GOOGLE_APPLICATION_CREDENTIALS` to that path](https://cloud.google.com/docs/authentication/production#finding_credentials_automatically) for it to be used automatically
+- set `GOOGLE_APPLICATION_CREDENTIALS` to the key file's path for it [to be used automatically](https://cloud.google.com/docs/authentication/production#finding_credentials_automatically)
+
+### Testing
+
+To be able to run the tests:
+- create a `test_lh_extract` dataset in your BigQuery project
+- make the service account from above at least a [`BigQuery Job User`](https://cloud.google.com/bigquery/docs/access-control#bigquery)
+- give the service account [`BigQuery Data Editor`](https://cloud.google.com/bigquery/docs/access-control#bigquery) access to _just_ (or at least) the `test_lh_extract` dataset
+- consider limiting the BigQuery quota to the test account, just in case, though this may require creating a separate Cloud project used only for testing.
+
+Service accounts should be given the minimum permissions needed. For more about the service account roles, see the [BigQuery predefined roles docs](https://cloud.google.com/bigquery/docs/access-control#bigquery).
