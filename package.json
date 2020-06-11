@@ -28,11 +28,13 @@
   "homepage": "https://github.com/GoogleChromeLabs/lh-metrics-analysis#readme",
   "dependencies": {
     "@google-cloud/bigquery": "^4.7.0",
-    "@google-cloud/storage": "^5.0.1"
+    "@google-cloud/storage": "^5.0.1",
+    "uuid": "^8.1.0"
   },
   "devDependencies": {
     "@types/mocha": "^7.0.2",
     "@types/node": "^14.0.13",
+    "@types/uuid": "^8.0.0",
     "babel-eslint": "^10.1.0",
     "c8": "^7.2.0",
     "eslint": "7.2.0",
