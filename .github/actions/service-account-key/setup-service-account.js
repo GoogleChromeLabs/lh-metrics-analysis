@@ -54,7 +54,6 @@ function run() {
 
   core.exportVariable('GOOGLE_APPLICATION_CREDENTIALS', credentialsPath);
   core.info('Successfully exported Default Application Credentials');
-  core.info('Fakety fake');
 }
 
 try {
