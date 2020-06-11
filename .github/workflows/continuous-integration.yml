@@ -46,3 +46,16 @@ jobs:
 
     - run: yarn lint
     - run: yarn type-check
+
+    - name: Set up gcloud application default credentials
+      uses: brendankenny/github-actions/service-account-key@master
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+    - name: Integration tests
+      run: yarn coverage
+
+
+    - name: Upload test coverage to Codecov
+      uses: codecov/codecov-action@f532c3a
+      with:
+        file: ./coverage/lcov.info
