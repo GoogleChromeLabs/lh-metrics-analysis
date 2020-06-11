@@ -6,6 +6,7 @@
   "scripts": {
     "test-all": "yarn lint && yarn type-check && yarn test",
     "test": "mocha test/**/*-test.js",
+    "coverage": "c8 --all --include=js/**/*.js --reporter=html --reporter=lcovonly ./node_modules/.bin/mocha test/**/*-test.js",
     "lint": "eslint .",
     "type-check": "tsc -p ."
   },
@@ -33,6 +34,7 @@
     "@types/mocha": "^7.0.2",
     "@types/node": "^14.0.13",
     "babel-eslint": "^10.1.0",
+    "c8": "^7.2.0",
     "eslint": "7.2.0",
     "eslint-config-google": "0.14.0",
     "mocha": "^8.0.1",
