@@ -17,6 +17,8 @@
 'use strict';
 
 module.exports = {
+  // Include actions, but not built file in dist/.
+  ignorePatterns: ['!.github', '**/dist/'],
   // start with google standard style
   //     https://github.com/google/eslint-config-google/blob/master/index.js
   extends: ['eslint:recommended', 'google'],

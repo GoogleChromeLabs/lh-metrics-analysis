@@ -16,5 +16,9 @@
     "js/**/*.js",
     "test/**/*.js",
     "js/types/**/*.d.ts",
+    ".github/**/*.js",
+  ],
+  "exclude": [
+    "**/dist/*.js"
   ],
 }
