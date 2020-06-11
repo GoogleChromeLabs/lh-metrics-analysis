@@ -48,7 +48,10 @@ jobs:
     - run: yarn type-check
 
     - name: Check service-account-key action is up to date
-      run: yarn build-action
+      # Re-build and fail if any changes were made to built file.
+      run: |
+        yarn build-action
+        git diff --exit-code .github/actions/service-account-key/dist/index.js
 
     - name: Set up gcloud application default credentials
       uses: ./.github/actions/service-account-key
