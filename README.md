@@ -1,4 +1,4 @@
-# lh-metrics-analysis
+# lh-metrics-analysis [![CI Status](https://github.com/googlechromelabs/lh-metrics-analysis/workflows/CI/badge.svg)](https://github.com/googlechromelabs/lh-metrics-analysis/actions?query=workflow%3ACI)
 
 Tools to analyze trends in HTTP Archive's Lighthouse data.
 
