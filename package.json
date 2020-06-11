@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test-all": "yarn lint && yarn type-check && yarn test",
+    "test": "mocha test/**/*-test.js",
     "lint": "eslint .",
     "type-check": "tsc -p ."
   },
@@ -28,10 +30,12 @@
     "@google-cloud/storage": "^5.0.1"
   },
   "devDependencies": {
+    "@types/mocha": "^7.0.2",
     "@types/node": "^14.0.13",
     "babel-eslint": "^10.1.0",
     "eslint": "7.2.0",
     "eslint-config-google": "0.14.0",
+    "mocha": "^8.0.1",
     "typescript": "^3.9.5"
   }
 }
