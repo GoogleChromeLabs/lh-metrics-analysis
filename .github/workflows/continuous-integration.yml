@@ -47,6 +47,9 @@ jobs:
     - run: yarn lint
     - run: yarn type-check
 
+    - name: Check service-account-key action is up to date
+      run: yarn build-action
+
     - name: Set up gcloud application default credentials
       uses: ./.github/actions/service-account-key
       with:
