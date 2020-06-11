@@ -1,0 +1,37 @@
+{
+  "name": "lh-metrics-analysis",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "type-check": "tsc -p ."
+  },
+  "engines": {
+    "node": ">=14.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GoogleChromeLabs/lh-metrics-analysis.git"
+  },
+  "keywords": [
+    "lighthouse",
+    "httparchive"
+  ],
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/GoogleChromeLabs/lh-metrics-analysis/issues"
+  },
+  "homepage": "https://github.com/GoogleChromeLabs/lh-metrics-analysis#readme",
+  "dependencies": {
+    "@google-cloud/bigquery": "^4.7.0",
+    "@google-cloud/storage": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^14.0.13",
+    "babel-eslint": "^10.1.0",
+    "eslint": "7.2.0",
+    "eslint-config-google": "0.14.0",
+    "typescript": "^3.9.5"
+  }
+}
