@@ -25,7 +25,7 @@ import {fileURLToPath} from 'url';
  * @param {ImportMeta} importMeta
  * @return {string}
  */
-function __filename(importMeta) {
+function filename(importMeta) {
   return fileURLToPath(importMeta.url);
 }
 
@@ -37,16 +37,16 @@ function __filename(importMeta) {
  * @param {ImportMeta} importMeta
  * @return {string}
  */
-function __dirname(importMeta) {
+function dirname(importMeta) {
   return path.dirname(fileURLToPath(importMeta.url));
 }
 
 // @ts-expect-error - we can use import.meta with --module=commonjs, trust me :)
 const importMeta = import.meta;
-const PROJECT_ROOT = path.resolve(__dirname(importMeta) + '/..');
+const PROJECT_ROOT = path.resolve(dirname(importMeta) + '/..');
 
 export {
-  __filename,
-  __dirname,
+  filename,
+  dirname,
   PROJECT_ROOT,
 };
