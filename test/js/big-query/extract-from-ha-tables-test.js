@@ -27,6 +27,7 @@ import HaTablesData from '../../../js/big-query/ha-tables-data.js';
 import credentials from '../../../js/big-query/auth/credentials.js';
 import {extractMetricsFromHaLhrs, getExtractedTableId, assertValidYear, assertValidMonth} from
   '../../../js/big-query/extract-from-ha-tables.js';
+import {assertValidBigQueryId} from '../../../js/big-query/bq-utils.js';
 
 import expectedExtractedTables from './expected-extracted-tables.js';
 
@@ -66,8 +67,11 @@ async function getSourceTableIds(bigQuery) {
  * @return {Promise<Array<Record<string, unknown>>>}
  */
 async function getExtractedTableContents(extractedTable) {
+  const tableId = extractedTable.id || 'keep tsc happy';
+  assertValidBigQueryId(tableId);
+
   const query = `SELECT *
-    FROM \`${extractedTable.id}\`
+    FROM \`${tableId}\`
     ORDER BY requested_url, final_url`;
 
   const [rows] = await extractedTable.dataset.query({query});
