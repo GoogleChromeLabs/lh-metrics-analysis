@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "test-all": "yarn lint && yarn type-check && yarn test",
-    "test": "mocha test/**/*-test.js",
-    "coverage": "c8 --all --include=js/**/*.js --reporter=html --reporter=lcovonly ./node_modules/.bin/mocha test/**/*-test.js",
+    "test": "mocha 'test/**/*-test.js'",
+    "coverage": "c8 --all --include=js/**/*.js --reporter=html --reporter=lcovonly ./node_modules/.bin/mocha 'test/**/*-test.js'",
     "lint": "eslint .",
     "type-check": "tsc -p .",
     "build-action": "cd .github/actions/service-account-key/ && ncc build setup-service-account.js"
@@ -41,6 +41,7 @@
     "@zeit/ncc": "0.22.3",
     "babel-eslint": "^10.1.0",
     "c8": "^7.2.0",
+    "csv-spectrum": "^1.0.0",
     "eslint": "7.2.0",
     "eslint-config-google": "0.14.0",
     "mocha": "^8.0.1",
