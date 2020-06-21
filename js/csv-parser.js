@@ -41,6 +41,7 @@ class CsvParser {
   constructor(text) {
     this.text = text;
     this.eof = this.text.length === 0;
+    this.eol = this.eof;
   }
 
   /**
