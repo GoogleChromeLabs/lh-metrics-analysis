@@ -106,16 +106,14 @@ class CsvParser {
     this.cursor++;
 
     // Special case: RFC 4180 allows optional line break at eof, so if it's
-    // missing and delimiter is the last character, *don't* mark as eof so it
+    // missing and the last character is a delimiter, *don't* mark as eof so it
     // acts as if there was a line break following this (giving one last empty
     // token for the missing value). e.g. 'a,' gives tokens 'a' and ''.
-    if (this.cursor === this.text.length && c === 44) {
-      return token;
-    }
+    const eofDelimiter = this.cursor === this.text.length && c === 44;
 
     // End of file if we're out of characters to examine.
-    this.eof = this.cursor >= this.text.length;
-    // End of line if c *was* `\n`, `\r`, or we're out of characters.
+    this.eof = this.cursor >= this.text.length && !eofDelimiter;
+    // End of line if c *was* `\n` or `\r`, or we're at the end of all things.
     this.eol = c === 10 || c === 13 || this.eof;
 
     return token;
