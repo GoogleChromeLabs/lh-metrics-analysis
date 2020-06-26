@@ -17,6 +17,7 @@
     "test/**/*.js",
     "js/types/**/*.d.ts",
     ".github/**/*.js",
+    "third_party/**/*.js",
   ],
   "exclude": [
     "**/dist/*.js"
