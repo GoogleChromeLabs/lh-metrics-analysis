@@ -9,7 +9,8 @@
     "coverage": "c8 --all --include=js/**/*.js --reporter=html --reporter=lcovonly ./node_modules/.bin/mocha 'test/**/*-test.js'",
     "lint": "eslint .",
     "type-check": "tsc -p .",
-    "build-action": "cd .github/actions/service-account-key/ && ncc build setup-service-account.js"
+    "build-action": "cd .github/actions/service-account-key/ && ncc build setup-service-account.js",
+    "build-boost-special-functions": "rm -r c++/build; mkdir c++/build && cd c++/build && cmake .. && cmake --build ."
   },
   "engines": {
     "node": ">=14.4"
