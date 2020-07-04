@@ -18,28 +18,22 @@
 #include <stdexcept>
 
 // Check values of Boost's `ibeta_derivative` implementation using double
-// precision (same as JS).
+// precision (to match JavaScript as close as possible).
 // https://www.boost.org/doc/libs/1_73_0/libs/math/doc/html/math_toolkit/sf_beta/beta_derivative.html
-
-using NumberType = double;
-// Other options for checking with extended precision:
-// #include <boost/multiprecision/cpp_bin_float.hpp> // float128.hpp doesn't
-// work in Clang. using NumberType = boost::multiprecision::cpp_bin_float_50;
-// using NumberType = long double;
 
 int main(int argc, char** argv) {
   // Parameters for the derivative of the regularized incomplete beta function.
-  NumberType a = 0;
-  NumberType b = 0;
-  NumberType x = 0;
+  double a = 0;
+  double b = 0;
+  double x = 0;
 
   try {
     namespace po = boost::program_options;
     po::options_description desc("Options");
     desc.add_options()("help,h", "print help message")(
-        "a,a", po::value<NumberType>(&a)->required(), "parameter a")(
-        "b,b", po::value<NumberType>(&b)->required(), "parameter b")(
-        "x,x", po::value<NumberType>(&x)->required(), "parameter x");
+        "a,a", po::value<double>(&a)->required(), "parameter a")(
+        "b,b", po::value<double>(&b)->required(), "parameter b")(
+        "x,x", po::value<double>(&x)->required(), "parameter x");
 
     po::positional_options_description pos_options;
     pos_options.add("a", 1).add("b", 1).add("x", 1);
@@ -68,8 +62,16 @@ int main(int argc, char** argv) {
 
   std::cerr << "ibeta_derivative(" << a << ", " << b << ", " << x << ")\n";
 
+  // Most (all?) JS engines use SSE. In order to match, don't allow Boost to
+  // auto-promote to extended (80 bit) precision.
+  typedef boost::math::policies::policy<
+      boost::math::policies::promote_double<false> >
+      double_policy;
+
+  double ibeta_value = boost::math::ibeta_derivative(a, b, x, double_policy());
+
   std::cout
       // Make sure enough digits are printed.
-      << std::setprecision(std::numeric_limits<NumberType>::max_digits10)
-      << boost::math::ibeta_derivative(a, b, x) << "\n";
+      << std::setprecision(std::numeric_limits<double>::max_digits10)
+      << ibeta_value << "\n";
 }
