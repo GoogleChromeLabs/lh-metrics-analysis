@@ -20,7 +20,7 @@
 /**
  * Find the ulps difference between doubles `a` and `b`. Based on
  * https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
- * adjusted for doubles instead of floats.
+ * adjusted for JS and doubles instead of floats.
  * @param {number} a
  * @param {number} b
  * @return {number}
@@ -30,12 +30,12 @@ function ulpsDifference(a, b) {
   if (Number.isNaN(b)) throw new Error('parameter b is NaN');
 
   if (Math.sign(a) !== Math.sign(b)) {
-    // +0 === -0 but have different signs.
+    // +0 === -0, but they have different signs.
     if (a === b) {
       return 0;
     }
 
-    // Opposite signs are oceans of ulps away from each other, don't deal with
+    // Opposite signs are oceans of ulps away from each other; don't deal with
     // them for now.
     throw new Error(`${a} and ${b} are of opposite signs so ulps are useless`);
   }

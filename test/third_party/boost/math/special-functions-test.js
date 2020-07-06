@@ -29,18 +29,13 @@ import {ibetaDerivative} from '../../../../third_party/boost/math/special-functi
  * @return {void}
  */
 function assertAlmostEqual(actual, expected) {
-  const absDiff = Math.abs(actual - expected);
-
   // Less than this difference is fine enough.
-  if (absDiff < 1e-16) {
-    return;
-  }
+  const absDiff = Math.abs(actual - expected);
+  if (absDiff < 1e-16) return;
 
   // Small ulps difference is fine, too.
   const ulpsDiff = ulpsDifference(actual, expected);
-  if (ulpsDiff < 4) {
-    return;
-  }
+  if (ulpsDiff < 4) return;
 
   if (actual !== 0) {
     throw new AssertionError({
