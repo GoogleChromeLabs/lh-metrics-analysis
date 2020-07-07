@@ -6,7 +6,7 @@
   "scripts": {
     "test-all": "yarn lint && yarn type-check && yarn test",
     "test": "mocha 'test/**/*-test.js'",
-    "coverage": "c8 --all --include={js,third_party}/**/*.js --reporter=html --reporter=lcovonly ./node_modules/.bin/mocha 'test/**/*-test.js'",
+    "coverage": "c8 --all --include={js,third_party}/**/*.js --exclude=third_party/boost/math/test/*.js --reporter=html --reporter=lcovonly ./node_modules/.bin/mocha 'test/**/*-test.js'",
     "lint": "eslint .",
     "type-check": "tsc -p .",
     "build-action": "cd .github/actions/service-account-key/ && ncc build setup-service-account.js",

@@ -21,21 +21,28 @@ import {ulpsDifference} from '../../../test-utils/floating-point-checks.js';
 
 import {ibetaDerivative} from '../../../../third_party/boost/math/special-functions.js';
 
+import idData from '../../../../third_party/boost/math/test/ibeta_derivative_data.js';
+import idIntData from '../../../../third_party/boost/math/test/ibeta_derivative_int_data.js';
+import idLargeData from '../../../../third_party/boost/math/test/ibeta_derivative_large_data.js';
+import idSmallData from '../../../../third_party/boost/math/test/ibeta_derivative_small_data.js';
+
 /**
  * Assert floating point closeness with nice assertion error.
  * Adopted from https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
  * @param {number} actual
  * @param {number} expected
+ * @param {{maxAbsDiff?: number, maxUlpsDiff?: number}} [options]
  * @return {void}
  */
-function assertAlmostEqual(actual, expected) {
+function assertAlmostEqual(actual, expected,
+    {maxAbsDiff = 1e-16, maxUlpsDiff = 4} = {}) {
   // Less than this difference is fine enough.
   const absDiff = Math.abs(actual - expected);
-  if (absDiff < 1e-16) return;
+  if (absDiff <= maxAbsDiff) return;
 
   // Small ulps difference is fine, too.
   const ulpsDiff = ulpsDifference(actual, expected);
-  if (ulpsDiff < 4) return;
+  if (ulpsDiff <= maxUlpsDiff) return;
 
   if (actual !== 0) {
     throw new AssertionError({
@@ -126,6 +133,52 @@ describe('Boost ibetaDerivative', () => {
 
       it(`ibetaDerivative(${test.params.join(', ')}) - ${ulpsDiff} ulps`, () => {
         assertAlmostEqual(actual, test.expected);
+      });
+    }
+  });
+
+  describe('imported boost ibeta_derivative tests', () => {
+    /**
+     * @param {Array<[number, number, number, number]>} tests
+     * @param {{maxAbsDiff?: number, maxUlpsDiff?: number}} assertionOptions
+     */
+    function runImportedTests(tests, assertionOptions) {
+      for (const [a, b, x, expected] of tests) {
+        const actual = ibetaDerivative(a, b, x);
+
+        try {
+          assertAlmostEqual(actual, expected, assertionOptions);
+        } catch (err) {
+          // Give a better error message to help find the exact failing test.
+          err.message = `ibetaDerivative(${a}, ${b}, ${x}): ${err.message}`;
+          throw err;
+        }
+      }
+    }
+
+    // Since these are tested against the values calculated with very high
+    // precision, loosen `maxAbsDiff` error bounds per suite.
+    const suites = {
+      ibeta_derivative_data: {
+        tests: idData,
+        options: {maxAbsDiff: 1.9e-14},
+      },
+      ibeta_derivative_int_data: {
+        tests: idIntData,
+        options: {maxAbsDiff: 1.34e-14},
+      },
+      ibeta_derivative_large_data: {
+        tests: idLargeData,
+        options: {maxAbsDiff: 1.8e-14},
+      },
+      ibeta_derivative_small_data: {
+        tests: idSmallData,
+        options: {maxAbsDiff: 4e-15},
+      },
+    };
+    for (const [suiteId, {tests, options}] of Object.entries(suites)) {
+      it(`passes ${tests.length} ${suiteId} tests`, () => {
+        runImportedTests(tests, options);
       });
     }
   });
