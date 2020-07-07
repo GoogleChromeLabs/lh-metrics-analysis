@@ -138,14 +138,11 @@ describe('Boost ibetaDerivative', () => {
   });
 
   describe('imported boost ibeta_derivative tests', () => {
-    // Since these are tested against the values calculated with very high
-    // precision, loosen error bounds.
-    const assertionOptions = {maxAbsDiff: 1.9e-14};
-
     /**
      * @param {Array<[number, number, number, number]>} tests
+     * @param {{maxAbsDiff?: number, maxUlpsDiff?: number}} assertionOptions
      */
-    function runImportedTests(tests) {
+    function runImportedTests(tests, assertionOptions) {
       for (const [a, b, x, expected] of tests) {
         const actual = ibetaDerivative(a, b, x);
 
@@ -159,15 +156,29 @@ describe('Boost ibetaDerivative', () => {
       }
     }
 
+    // Since these are tested against the values calculated with very high
+    // precision, loosen `maxAbsDiff` error bounds per suite.
     const suites = {
-      ibeta_derivative_data: idData,
-      ibeta_derivative_int_data: idIntData,
-      ibeta_derivative_large_data: idLargeData,
-      ibeta_derivative_small_data: idSmallData,
+      ibeta_derivative_data: {
+        tests: idData,
+        options: {maxAbsDiff: 1.9e-14},
+      },
+      ibeta_derivative_int_data: {
+        tests: idIntData,
+        options: {maxAbsDiff: 1.34e-14},
+      },
+      ibeta_derivative_large_data: {
+        tests: idLargeData,
+        options: {maxAbsDiff: 1.8e-14},
+      },
+      ibeta_derivative_small_data: {
+        tests: idSmallData,
+        options: {maxAbsDiff: 4e-15},
+      },
     };
-    for (const [suiteId, tests] of Object.entries(suites)) {
+    for (const [suiteId, {tests, options}] of Object.entries(suites)) {
       it(`passes ${tests.length} ${suiteId} tests`, () => {
-        runImportedTests(tests);
+        runImportedTests(tests, options);
       });
     }
   });

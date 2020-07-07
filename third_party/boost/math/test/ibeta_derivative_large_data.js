@@ -954,7 +954,7 @@ const ibetaDerivativeLargeData = [
 
   // NOTE(bckenny): modifying this test. The x precision goes well beyond double
   // and is significant since a and b are large. As of this commit, difference
-  // is 1.7408297026122455e-13 (49 ulps), but matches exactly `ibeta_derivative`
+  // is 1.7408297026122455e-13 (49 ulps), but exactly matches `ibeta_derivative`
   // when constrained to doubles without promotion to extended precision. Using
   // that value (20.035462731451169) instead.
   // [3.1635363769531250000000000000000000000000e+03, 2.9823937988281250000000000000000000000000e+02, 9.0580135583877563476562500000000000000000e-01, 2.0035462731451342187854304379227819269576e+01],
