@@ -31,16 +31,18 @@ import idSmallData from '../../../../third_party/boost/math/test/ibeta_derivativ
  * Adopted from https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
  * @param {number} actual
  * @param {number} expected
+ * @param {{maxAbsDiff?: number, maxUlpsDiff?: number}} [options]
  * @return {void}
  */
-function assertAlmostEqual(actual, expected) {
+function assertAlmostEqual(actual, expected,
+    {maxAbsDiff = 1e-16, maxUlpsDiff = 4} = {}) {
   // Less than this difference is fine enough.
   const absDiff = Math.abs(actual - expected);
-  if (absDiff < 1e-14) return;
+  if (absDiff <= maxAbsDiff) return;
 
   // Small ulps difference is fine, too.
   const ulpsDiff = ulpsDifference(actual, expected);
-  if (ulpsDiff < 10) return;
+  if (ulpsDiff <= maxUlpsDiff) return;
 
   if (actual !== 0) {
     throw new AssertionError({
@@ -135,49 +137,38 @@ describe('Boost ibetaDerivative', () => {
     }
   });
 
-  describe('imported boost tests', () => {
-    describe('passes ibeta_derivative_data tests', () => {
-      for (const test of idData) {
-        const actual = ibetaDerivative(test[0], test[1], test[2]);
-        const ulpsDiff = ulpsDifference(actual, test[3]);
+  describe('imported boost ibeta_derivative tests', () => {
+    // Since these are tested against the values calculated with very high
+    // precision, loosen error bounds.
+    const assertionOptions = {maxAbsDiff: 1.9e-14};
 
-        it(`ibetaDerivative(${test[0]}, ${test[1]}, ${test[2]}) - ${ulpsDiff} ulps`, () => {
-          assertAlmostEqual(actual, test[3]);
-        });
+    /**
+     * @param {Array<[number, number, number, number]>} tests
+     */
+    function runImportedTests(tests) {
+      for (const [a, b, x, expected] of tests) {
+        const actual = ibetaDerivative(a, b, x);
+
+        try {
+          assertAlmostEqual(actual, expected, assertionOptions);
+        } catch (err) {
+          // Give a better error message to help find the exact failing test.
+          err.message = `ibetaDerivative(${a}, ${b}, ${x}): ${err.message}`;
+          throw err;
+        }
       }
-    });
+    }
 
-    describe('passes ibeta_derivative_int_data tests', () => {
-      for (const test of idIntData) {
-        const actual = ibetaDerivative(test[0], test[1], test[2]);
-        const ulpsDiff = ulpsDifference(actual, test[3]);
-
-        it(`ibetaDerivative(${test[0]}, ${test[1]}, ${test[2]}) - ${ulpsDiff} ulps`, () => {
-          assertAlmostEqual(actual, test[3]);
-        });
-      }
-    });
-
-    describe('passes ibeta_derivative_large_data tests', () => {
-      for (const test of idLargeData) {
-        const actual = ibetaDerivative(test[0], test[1], test[2]);
-        const ulpsDiff = ulpsDifference(actual, test[3]);
-
-        it(`ibetaDerivative(${test[0]}, ${test[1]}, ${test[2]}) - ${ulpsDiff} ulps`, () => {
-          assertAlmostEqual(actual, test[3]);
-        });
-      }
-    });
-
-    describe('passes ibeta_derivative_small_data tests', () => {
-      for (const test of idSmallData) {
-        const actual = ibetaDerivative(test[0], test[1], test[2]);
-        const ulpsDiff = ulpsDifference(actual, test[3]);
-
-        it(`ibetaDerivative(${test[0]}, ${test[1]}, ${test[2]}) - ${ulpsDiff} ulps`, () => {
-          assertAlmostEqual(actual, test[3]);
-        });
-      }
-    });
+    const suites = {
+      ibeta_derivative_data: idData,
+      ibeta_derivative_int_data: idIntData,
+      ibeta_derivative_large_data: idLargeData,
+      ibeta_derivative_small_data: idSmallData,
+    };
+    for (const [suiteId, tests] of Object.entries(suites)) {
+      it(`passes ${tests.length} ${suiteId} tests`, () => {
+        runImportedTests(tests);
+      });
+    }
   });
 });
