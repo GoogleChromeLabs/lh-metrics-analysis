@@ -21,6 +21,11 @@ import {ulpsDifference} from '../../../test-utils/floating-point-checks.js';
 
 import {ibetaDerivative} from '../../../../third_party/boost/math/special-functions.js';
 
+import idData from '../../../../third_party/boost/math/test/ibeta_derivative_data.js';
+import idIntData from '../../../../third_party/boost/math/test/ibeta_derivative_int_data.js';
+import idLargeData from '../../../../third_party/boost/math/test/ibeta_derivative_large_data.js';
+import idSmallData from '../../../../third_party/boost/math/test/ibeta_derivative_small_data.js';
+
 /**
  * Assert floating point closeness with nice assertion error.
  * Adopted from https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
@@ -31,11 +36,11 @@ import {ibetaDerivative} from '../../../../third_party/boost/math/special-functi
 function assertAlmostEqual(actual, expected) {
   // Less than this difference is fine enough.
   const absDiff = Math.abs(actual - expected);
-  if (absDiff < 1e-16) return;
+  if (absDiff < 1e-14) return;
 
   // Small ulps difference is fine, too.
   const ulpsDiff = ulpsDifference(actual, expected);
-  if (ulpsDiff < 4) return;
+  if (ulpsDiff < 10) return;
 
   if (actual !== 0) {
     throw new AssertionError({
@@ -128,5 +133,51 @@ describe('Boost ibetaDerivative', () => {
         assertAlmostEqual(actual, test.expected);
       });
     }
+  });
+
+  describe('imported boost tests', () => {
+    describe('passes ibeta_derivative_data tests', () => {
+      for (const test of idData) {
+        const actual = ibetaDerivative(test[0], test[1], test[2]);
+        const ulpsDiff = ulpsDifference(actual, test[3]);
+
+        it(`ibetaDerivative(${test[0]}, ${test[1]}, ${test[2]}) - ${ulpsDiff} ulps`, () => {
+          assertAlmostEqual(actual, test[3]);
+        });
+      }
+    });
+
+    describe('passes ibeta_derivative_int_data tests', () => {
+      for (const test of idIntData) {
+        const actual = ibetaDerivative(test[0], test[1], test[2]);
+        const ulpsDiff = ulpsDifference(actual, test[3]);
+
+        it(`ibetaDerivative(${test[0]}, ${test[1]}, ${test[2]}) - ${ulpsDiff} ulps`, () => {
+          assertAlmostEqual(actual, test[3]);
+        });
+      }
+    });
+
+    describe('passes ibeta_derivative_large_data tests', () => {
+      for (const test of idLargeData) {
+        const actual = ibetaDerivative(test[0], test[1], test[2]);
+        const ulpsDiff = ulpsDifference(actual, test[3]);
+
+        it(`ibetaDerivative(${test[0]}, ${test[1]}, ${test[2]}) - ${ulpsDiff} ulps`, () => {
+          assertAlmostEqual(actual, test[3]);
+        });
+      }
+    });
+
+    describe('passes ibeta_derivative_small_data tests', () => {
+      for (const test of idSmallData) {
+        const actual = ibetaDerivative(test[0], test[1], test[2]);
+        const ulpsDiff = ulpsDifference(actual, test[3]);
+
+        it(`ibetaDerivative(${test[0]}, ${test[1]}, ${test[2]}) - ${ulpsDiff} ulps`, () => {
+          assertAlmostEqual(actual, test[3]);
+        });
+      }
+    });
   });
 });
