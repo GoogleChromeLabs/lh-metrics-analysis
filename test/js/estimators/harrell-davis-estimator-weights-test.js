@@ -143,6 +143,10 @@ describe('Harrel-Davis Estimator Weights', () => {
 
             const peakMirrorIndex = length - peakIndex - 1;
             assertAlmostEqual(weights[peakMirrorIndex], decileExpected[1], {maxAbsDiff});
+
+            // Since the function is regularized, should sum to 1.
+            const sum = weights.reduce((sum, next) => sum + next);
+            assertAlmostEqual(sum, 1, {maxAbsDiff: 3e-14}); // Close enough.
           }
 
           // The upper deciles (including the 50th), should be mirror images of
