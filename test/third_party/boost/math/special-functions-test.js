@@ -119,13 +119,8 @@ describe('Boost ibetaDerivative', () => {
       for (const [a, b, x, expected] of tests) {
         const actual = ibetaDerivative(a, b, x);
 
-        try {
-          assertAlmostEqual(actual, expected, assertionOptions);
-        } catch (err) {
-          // Give a better error message to help find the exact failing test.
-          err.message = `ibetaDerivative(${a}, ${b}, ${x}): ${err.message}`;
-          throw err;
-        }
+        assertAlmostEqual(actual, expected,
+            {...assertionOptions, message: `ibetaDerivative(${a}, ${b}, ${x})`});
       }
     }
 
