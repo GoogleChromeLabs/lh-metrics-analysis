@@ -1,6 +1,8 @@
 # validate this file:
 #   curl --data-binary @.codecov.yml https://codecov.io/validate
 
+comment: off
+
 # partial line support
 parsers:
   javascript:
