@@ -61,6 +61,6 @@ jobs:
       run: yarn coverage
 
     - name: Upload test coverage to Codecov
-      uses: codecov/codecov-action@f532c3a
+      uses: codecov/codecov-action@e16d515
       with:
         file: ./coverage/lcov.info
