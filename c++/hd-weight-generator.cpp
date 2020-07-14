@@ -119,7 +119,9 @@ int main(int argc, char** argv) {
     } else {
       // Only write doubles (not higher precision) to stdout so they can be
       // imported in JS.
-      double d_value = value.convert_to<double>();
+      // Uncomment for boost::multiprecision.
+      // double d_value = value.convert_to<double>();
+      double d_value = (double)value;
       std::cout.write(reinterpret_cast<char*>(&d_value), sizeof d_value);
     }
   }

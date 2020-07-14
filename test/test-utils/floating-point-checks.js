@@ -37,9 +37,11 @@ function ulpsDifference(a, b) {
       return 0;
     }
 
-    // Opposite signs are oceans of ulps away from each other; don't deal with
-    // them for now.
-    throw new Error(`${a} and ${b} are of opposite signs so ulps are useless`);
+    if (Math.sign(a) === -Math.sign(b)) {
+      // Opposite signs are oceans of ulps away from each other; don't deal with
+      // them for now.
+      throw new Error(`${a} and ${b} are of opposite signs so ulps are useless`);
+    }
   }
 
   // Subtract their integer representations.
@@ -55,11 +57,11 @@ function ulpsDifference(a, b) {
  * Defaults to testing with a `maxAbsDiff` of `1e-16` and a `maxUlpsDiff` of 4.
  * @param {number} actual
  * @param {number} expected
- * @param {{maxAbsDiff?: number, maxUlpsDiff?: number}} [options]
+ * @param {{maxAbsDiff?: number, maxUlpsDiff?: number, message?: string}} [options]
  * @return {void}
  */
 function assertAlmostEqual(actual, expected,
-    {maxAbsDiff = 1e-16, maxUlpsDiff = 4} = {}) {
+    {maxAbsDiff = 1e-16, maxUlpsDiff = 4, message = ''} = {}) {
   // Less than this difference is fine enough.
   const absDiff = Math.abs(actual - expected);
   if (absDiff <= maxAbsDiff) return;
@@ -68,11 +70,16 @@ function assertAlmostEqual(actual, expected,
   const ulpsDiff = ulpsDifference(actual, expected);
   if (ulpsDiff <= maxUlpsDiff) return;
 
+  if (message) {
+    message += '; ';
+  }
+  message += `actual and expected differed by ${absDiff} (${ulpsDiff} ulps)`;
+
   if (actual !== 0) {
     throw new AssertionError({
       actual,
       expected,
-      message: `actual and expected differed by ${absDiff} (${ulpsDiff} ulps)`,
+      message,
     });
   }
 }

@@ -159,12 +159,8 @@ describe('Harrel-Davis Estimator Weights', () => {
             // without mirroring.
             if (decile === 5) {
               for (let i = 0; i < weights.length; i++) {
-                try {
-                  assertAlmostEqual(weights[i], mirrorWeights[length - 1 - i], {maxAbsDiff});
-                } catch (err) {
-                  err.message = `Error on 5th decile, index ${i}: ${err.message}`;
-                  throw err;
-                }
+                assertAlmostEqual(weights[i], mirrorWeights[length - 1 - i],
+                    {maxAbsDiff, message: `Error on 5th decile, index ${i}`});
               }
               continue;
             }
