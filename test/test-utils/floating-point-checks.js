@@ -17,6 +17,8 @@
 // Needed for eslint for now:
 /* global BigInt64Array */
 
+import {AssertionError} from 'assert';
+
 /**
  * Find the ulps difference between doubles `a` and `b`. Based on
  * https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
@@ -47,6 +49,35 @@ function ulpsDifference(a, b) {
   return Math.abs(Number(biDiff));
 }
 
+/**
+ * Assert floating point closeness with nice assertion error.
+ * Adopted from https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
+ * Defaults to testing with a `maxAbsDiff` of `1e-16` and a `maxUlpsDiff` of 4.
+ * @param {number} actual
+ * @param {number} expected
+ * @param {{maxAbsDiff?: number, maxUlpsDiff?: number}} [options]
+ * @return {void}
+ */
+function assertAlmostEqual(actual, expected,
+    {maxAbsDiff = 1e-16, maxUlpsDiff = 4} = {}) {
+  // Less than this difference is fine enough.
+  const absDiff = Math.abs(actual - expected);
+  if (absDiff <= maxAbsDiff) return;
+
+  // Small ulps difference is fine, too.
+  const ulpsDiff = ulpsDifference(actual, expected);
+  if (ulpsDiff <= maxUlpsDiff) return;
+
+  if (actual !== 0) {
+    throw new AssertionError({
+      actual,
+      expected,
+      message: `actual and expected differed by ${absDiff} (${ulpsDiff} ulps)`,
+    });
+  }
+}
+
 export {
   ulpsDifference,
+  assertAlmostEqual,
 };

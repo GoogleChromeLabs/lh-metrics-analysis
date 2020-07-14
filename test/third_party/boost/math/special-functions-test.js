@@ -16,8 +16,8 @@
 
 /* eslint-env mocha */
 
-import {strict as assert, AssertionError} from 'assert';
-import {ulpsDifference} from '../../../test-utils/floating-point-checks.js';
+import {strict as assert} from 'assert';
+import {ulpsDifference, assertAlmostEqual} from '../../../test-utils/floating-point-checks.js';
 
 import {ibetaDerivative} from '../../../../third_party/boost/math/special-functions.js';
 
@@ -25,33 +25,6 @@ import idData from '../../../../third_party/boost/math/test/ibeta_derivative_dat
 import idIntData from '../../../../third_party/boost/math/test/ibeta_derivative_int_data.js';
 import idLargeData from '../../../../third_party/boost/math/test/ibeta_derivative_large_data.js';
 import idSmallData from '../../../../third_party/boost/math/test/ibeta_derivative_small_data.js';
-
-/**
- * Assert floating point closeness with nice assertion error.
- * Adopted from https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
- * @param {number} actual
- * @param {number} expected
- * @param {{maxAbsDiff?: number, maxUlpsDiff?: number}} [options]
- * @return {void}
- */
-function assertAlmostEqual(actual, expected,
-    {maxAbsDiff = 1e-16, maxUlpsDiff = 4} = {}) {
-  // Less than this difference is fine enough.
-  const absDiff = Math.abs(actual - expected);
-  if (absDiff <= maxAbsDiff) return;
-
-  // Small ulps difference is fine, too.
-  const ulpsDiff = ulpsDifference(actual, expected);
-  if (ulpsDiff <= maxUlpsDiff) return;
-
-  if (actual !== 0) {
-    throw new AssertionError({
-      actual,
-      expected,
-      message: `actual and expected differed by ${absDiff} (${ulpsDiff} ulps)`,
-    });
-  }
-}
 
 describe('Boost ibetaDerivative', () => {
   describe('invalid arguments', () => {

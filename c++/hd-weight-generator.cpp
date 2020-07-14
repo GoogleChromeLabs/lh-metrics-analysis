@@ -119,7 +119,7 @@ int main(int argc, char** argv) {
     } else {
       // Only write doubles (not higher precision) to stdout so they can be
       // imported in JS.
-      double d_value = (double)value;
+      double d_value = value.convert_to<double>();
       std::cout.write(reinterpret_cast<char*>(&d_value), sizeof d_value);
     }
   }
