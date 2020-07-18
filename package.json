@@ -32,7 +32,8 @@
     "@google-cloud/bigquery": "^4.7.0",
     "@google-cloud/storage": "^5.0.1",
     "enquirer": "^2.3.5",
-    "uuid": "^8.1.0"
+    "uuid": "^8.1.0",
+    "xorshift": "^1.1.1"
   },
   "devDependencies": {
     "@actions/core": "1.2.4",
