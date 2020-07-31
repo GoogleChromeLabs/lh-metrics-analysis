@@ -1,0 +1,23 @@
+Package: lhMetricsAnalysis
+Title: Lighthouse Metrics Analysis
+Description: Tools to analyze trends in HTTP Archive's Lighthouse data.
+License: Apache License 2.0
+Version: 0.0.1
+Authors@R: as.person(c(
+    "Brendan Kenny <bckenny@gmail.com> [aut, cre]" 
+  ))
+URL: https://github.com/GoogleChromeLabs/lh-metrics-analysis
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+Imports: 
+    here,
+    ggplot2,
+    docopt,
+    rogme (>= 0.2.1),
+    utils
+Suggests: 
+    testthat (>= 2.3)
+Remotes: 
+    GRousselet/rogme
