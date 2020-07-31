@@ -14,7 +14,7 @@
   },
   "include": [
     "js/**/*.js",
-    "test/**/*.js",
+    "tests/**/*.js",
     "js/types/**/*.d.ts",
     ".github/**/*.js",
     "third_party/**/*.js",

@@ -73,7 +73,7 @@ hdFromWeights <- function(x, weights){
 #' out <- shiftdhd(C1, C2, x_name = "Before", y_name = "After") # specify names for groups
 #'
 #' @export
-shiftdhd <- function(x, y, x_name = "Group1", y_name = "Group2", nboot = 200) {
+shiftdhd_forked <- function(x, y, x_name = "Group1", y_name = "Group2", nboot = 200) {
   # check all conditions have the same length
   if (length(x) != length(y)) {
     stop("shiftdhd: x and y must have the same length")

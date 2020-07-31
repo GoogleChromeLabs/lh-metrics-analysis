@@ -1,0 +1,9 @@
+^.github$
+^.vscode$
+^c++$
+^data$
+^js$
+^node_modules$
+^third_party$
+^.codecov.yml$
+^.eslintrc.cjs$
