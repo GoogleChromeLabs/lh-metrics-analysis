@@ -6,7 +6,7 @@
   "scripts": {
     "test-all": "yarn lint && yarn type-check && yarn test",
     "test": "mocha 'tests/**/*-test.js'",
-    "coverage": "c8 --all --include={js,third_party}/**/*.js --exclude=third_party/boost/math/tests/*.js --reporter=html --reporter=lcovonly ./node_modules/.bin/mocha 'tests/**/*-test.js'",
+    "coverage": "c8 --all --include={js,third_party}/**/*.js --exclude=third_party/boost/math/test/*.js --reporter=html --reporter=lcovonly ./node_modules/.bin/mocha 'tests/**/*-test.js'",
     "lint": "eslint .",
     "type-check": "tsc -p .",
     "build-action": "cd .github/actions/service-account-key/ && ncc build setup-service-account.js",
@@ -32,7 +32,8 @@
     "@google-cloud/bigquery": "^4.7.0",
     "@google-cloud/storage": "^5.0.1",
     "enquirer": "^2.3.5",
-    "uuid": "^8.1.0"
+    "uuid": "^8.1.0",
+    "xorshift": "^1.1.1"
   },
   "devDependencies": {
     "@actions/core": "1.2.4",

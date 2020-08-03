@@ -2397,6 +2397,11 @@ xdg-basedir@^4.0.0:
   resolved "https://registry.yarnpkg.com/xdg-basedir/-/xdg-basedir-4.0.0.tgz#4bc8d9984403696225ef83a1573cbbcb4e79db13"
   integrity sha512-PSNhEJDejZYV7h50BohL09Er9VaIefr2LMAf3OEmpCkjOi34eYyQYAXUTjEQtZJTKcF0E2UKTh+osDLsgNim9Q==
 
+xorshift@^1.1.1:
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/xorshift/-/xorshift-1.1.1.tgz#fb85883a82a0625c9f11372205df75b67dfe53e0"
+  integrity sha512-GMYHpzXeRwVXaHckrEbqqSNjNbms1oRSntP2weG4mrUMWAoLgF4b0ag/qqpYRbDEBfbC3Njt3+R5nX3lbP0Lww==
+
 xtend@~4.0.1:
   version "4.0.2"
   resolved "https://registry.yarnpkg.com/xtend/-/xtend-4.0.2.tgz#bb72779f5fa465186b1f438f674fa347fdb5db54"
