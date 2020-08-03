@@ -11,6 +11,8 @@ import {RunningVariance} from '../../js/estimators/running-variance.js';
 
 const MAX_32_UINT = Math.pow(2, 32) - 1;
 
+/** @typedef {{q: number, compare: number, base: number, difference: number, ciLower: number, ciUpper: number}} ShiftQuantile */
+
 /**
  * Returns an unbiased value from a uniform distribution of integers in
  * [0, max).
@@ -34,17 +36,19 @@ function getRandomInt(rng, max) {
  * 200 is usually sufficient for `shiftdhd`.
  * `randomSeed` can be provided to deterministically sample during
  * bootstrapping. Otherwise, a random seed is chosen on every run.
- * @param {Array<number>} compareInput
- * @param {Array<number>} baseInput
- * @param {{nboot: number, randomSeed?: [number, number, number, number]}} options
- * @return {Promise<Array<{q: number, compare: number, base: number, difference: number, ciLower: number, ciUpper: number}>>}
+ * @param {{compare: Array<number>, base: Array<number>}} data
+ * @param {{nboot: number, quiet?: boolean, randomSeed?: [number, number, number, number]}} options
+ * @return {Promise<Array<ShiftQuantile>>}
  */
-async function shiftdhd(compareInput, baseInput, {nboot, randomSeed}) {
+async function shiftdhd({compare: compareInput, base: baseInput}, {nboot, quiet, randomSeed}) {
   if (compareInput.length !== baseInput.length) {
-    throw new Error('dependent `compare` and `base` must have the same length');
+    throw new Error('dependent `base` and `compare` must have the same length');
   }
   const length = compareInput.length;
-  console.warn(`calculating dependent shift function on length ${length.toLocaleString()}`);
+  if (!quiet) {
+    /* c8 ignore next 2 */
+    console.warn(`calculating dependent shift function on length ${length.toLocaleString()}`);
+  }
 
   // Copy so that we're not modifying the originals.
   const compare = Float64Array.from(compareInput);
@@ -58,8 +62,8 @@ async function shiftdhd(compareInput, baseInput, {nboot, randomSeed}) {
   const crit = 37 / Math.pow(length, 1.4) + 2.75;
 
   const rng = randomSeed ? new xorshift.constructor(randomSeed) : xorshift;
-  const standardErrors =
-      await resampledDependentDiffStdDevPerQuantile(compare, base, hdWeightsByDecile, nboot, rng);
+  const standardErrors = await bootstrapDependentDiffStdDevPerQuantile(compare, base,
+      hdWeightsByDecile, nboot, rng, quiet);
 
   compare.sort((a, b) => a - b);
   base.sort((a, b) => a - b);
@@ -97,10 +101,11 @@ async function shiftdhd(compareInput, baseInput, {nboot, randomSeed}) {
  * @param {Array<Float64Array>} hdWeightsByQuantile
  * @param {number} nboot
  * @param {xorshift} rng
+ * @param {boolean} [quiet]
  * @return {Promise<Array<number>>}
  */
-async function resampledDependentDiffStdDevPerQuantile(compare, base, hdWeightsByQuantile,
-    nboot, rng) {
+async function bootstrapDependentDiffStdDevPerQuantile(compare, base, hdWeightsByQuantile,
+    nboot, rng, quiet) {
   const numberOfQuantiles = hdWeightsByQuantile.length;
   const variancesByQuantile = [];
   for (let i = 0; i < numberOfQuantiles; i++) {
@@ -112,7 +117,8 @@ async function resampledDependentDiffStdDevPerQuantile(compare, base, hdWeightsB
   const resampledBase = new Float64Array(length);
 
   for (let i = 0; i < nboot; i++) {
-    if (i % 25 === 0 && i > 0) {
+    if (!quiet && i % 25 === 0 && i > 0) {
+      /* c8 ignore next 2 */
       console.warn(`bootstrap iteration ${i}/${nboot}`);
     }
 
