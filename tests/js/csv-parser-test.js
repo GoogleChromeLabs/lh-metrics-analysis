@@ -24,7 +24,35 @@ import {CsvParser} from '../../js/csv-parser.js';
 import {PROJECT_ROOT} from '../../js/module-utils.js';
 
 describe('CsvParser', () => {
-  describe('#parseRows()', () => {
+  describe('#getToken()', () => {
+    it('tokenizes a basic example with eol and eof flags', () => {
+      const tokenizer = new CsvParser('a,b\nc');
+      assert.strictEqual(tokenizer.getToken(), 'a');
+      assert.strictEqual(tokenizer.eol, false);
+      assert.strictEqual(tokenizer.eof, false);
+
+      assert.strictEqual(tokenizer.getToken(), 'b');
+      assert.strictEqual(tokenizer.eol, true);
+      assert.strictEqual(tokenizer.eof, false);
+
+      assert.strictEqual(tokenizer.getToken(), 'c');
+      assert.strictEqual(tokenizer.eol, true);
+      assert.strictEqual(tokenizer.eof, true);
+    });
+
+    it('handles requesting tokens past the text', () => {
+      const tokenizer = new CsvParser('a');
+      assert.strictEqual(tokenizer.getToken(), 'a');
+      assert.strictEqual(tokenizer.eol, true);
+      assert.strictEqual(tokenizer.eof, true);
+
+      assert.strictEqual(tokenizer.getToken(), '');
+      assert.strictEqual(tokenizer.eol, true);
+      assert.strictEqual(tokenizer.eof, true);
+    });
+  });
+
+  describe('parseRows()', () => {
     it('parses basic examples', () => {
       assert.deepStrictEqual(CsvParser.parseRows('1,2\n'), [
         ['1', '2'],
