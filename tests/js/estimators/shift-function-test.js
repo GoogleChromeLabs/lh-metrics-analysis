@@ -23,7 +23,6 @@ import path from 'path';
 import {getShiftCsv, getPrettyPrintedShiftData} from '../../../js/estimators/shift-function.js';
 import {PROJECT_ROOT} from '../../../js/module-utils.js';
 
-// const testCsvPath = PROJECT_ROOT + '/tests/fixtures/paired-fcp-data.csv';
 // Path for a temporary generated test file. Always deleted at end of test run.
 const tmpTestFilePath = PROJECT_ROOT + '/tests/fixtures/test-file-2525-99-to-2525-98.csv';
 
