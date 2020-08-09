@@ -110,10 +110,11 @@ function getExtractedTableId({year, month}) {
  * @return {TableSchema}
  */
 function getExtractedTableSchema() {
-  /** @type {Array<{
-   * name: 'requested_url'|'final_url'|'lh_version'|'runtime_error_code'|MetricValueId,
-   * type: 'STRING'|'FLOAT',
-   * mode?: 'REQUIRED'
+  /**
+   * @type {Array<{
+   *   name: 'requested_url'|'final_url'|'lh_version'|'runtime_error_code'|'chrome_version'|MetricValueId,
+   *   type: 'STRING'|'FLOAT',
+   *   mode?: 'REQUIRED'
    * }>}
    */
   const fields = [
@@ -123,6 +124,7 @@ function getExtractedTableSchema() {
 
     // Nullable.
     {name: 'runtime_error_code', type: 'STRING'},
+    {name: 'chrome_version', type: 'STRING'},
 
     // Metrics (nullable if errored).
     // For whatever reason, schema always comes back as FLOAT, even if FLOAT64
@@ -249,6 +251,18 @@ function getLhrExtractQuery(haTableInfo, sourceOptions) {
         ELSE raw_runtime_error_code
         END AS runtime_error_code,
 
+      # chrome_version
+      CASE
+        WHEN major_lh_version = 2 AND minor_lh_version < 3
+          # $.userAgent added in 2.0.0 but was the *emulated* UA string before 2.3.0 (GoogleChrome/lighthouse#2612)
+          THEN NULL
+        WHEN major_lh_version < 4
+          THEN REGEXP_EXTRACT(JSON_EXTRACT_SCALAR(report, '$.userAgent'), r"Chrome\\/([\\d.]+)")
+        ELSE
+          # $.userAgent still works at this point, but $.environment.hostUserAgent is the intended future-proof property.
+          REGEXP_EXTRACT(JSON_EXTRACT_SCALAR(report, '$.environment.hostUserAgent'), r"Chrome\\/([\\d.]+)")
+        END AS chrome_version,
+
       # fcp_value
       CASE
         WHEN major_lh_version = 2
@@ -256,7 +270,8 @@ function getLhrExtractQuery(haTableInfo, sourceOptions) {
           THEN CAST(JSON_EXTRACT_SCALAR(report, '$.audits.first-meaningful-paint.extendedInfo.value.timings.fCP') AS FLOAT64)
         WHEN major_lh_version < 5
           THEN CAST(JSON_EXTRACT_SCALAR(report, '$.audits.first-contentful-paint.rawValue') AS FLOAT64)
-          ELSE CAST(JSON_EXTRACT_SCALAR(report, '$.audits.first-contentful-paint.numericValue') AS FLOAT64)
+        ELSE
+          CAST(JSON_EXTRACT_SCALAR(report, '$.audits.first-contentful-paint.numericValue') AS FLOAT64)
         END AS fcp_value,
 
       # fmp_value
@@ -286,7 +301,8 @@ function getLhrExtractQuery(haTableInfo, sourceOptions) {
           THEN  CAST(JSON_EXTRACT_SCALAR(report, '$.audits.speed-index-metric.rawValue') AS FLOAT64)
         WHEN major_lh_version < 5
           THEN CAST(JSON_EXTRACT_SCALAR(report, '$.audits.speed-index.rawValue') AS FLOAT64)
-          ELSE CAST(JSON_EXTRACT_SCALAR(report, '$.audits.speed-index.numericValue') AS FLOAT64)
+        ELSE
+          CAST(JSON_EXTRACT_SCALAR(report, '$.audits.speed-index.numericValue') AS FLOAT64)
         END AS si_value,
 
       # tbt_value available starting in 5.2.
@@ -299,7 +315,8 @@ function getLhrExtractQuery(haTableInfo, sourceOptions) {
           THEN CAST(JSON_EXTRACT_SCALAR(report, '$.audits.consistently-interactive.rawValue') AS FLOAT64)
         WHEN major_lh_version < 5
           THEN CAST(JSON_EXTRACT_SCALAR(report, '$.audits.interactive.rawValue') AS FLOAT64)
-          ELSE CAST(JSON_EXTRACT_SCALAR(report, '$.audits.interactive.numericValue') AS FLOAT64)
+        ELSE
+          CAST(JSON_EXTRACT_SCALAR(report, '$.audits.interactive.numericValue') AS FLOAT64)
         END AS tti_value,
     FROM (
       SELECT
