@@ -37,7 +37,7 @@ import {assertValidProjectId, assertValidBigQueryId} from './bq-utils.js';
  */
 /**
  * The metric values available to query.
- * @typedef {'fcp_value'|'fmp_value'|'lcp_value'|'mpfid_value'|'si_value'|'tbt_value'|'tti_value'} MetricValueId
+ * @typedef {'fcp_value'|'fmp_value'|'lcp_value'|'mpfid_value'|'si_value'|'tbt_value'|'tti_value'|'cls_value'} MetricValueId
  */
 
 // TODO(bckenny): use in caller
@@ -46,7 +46,6 @@ const EXTRACTED_DATASET_ID = 'lh_extract'; // eslint-disable-line no-unused-vars
 const DEFAULT_HA_PROJECT_ID = 'httparchive';
 const DEFAULT_HA_DATASET_ID = 'lighthouse';
 
-// TODO(bckenny): CLS
 // TODO(bckenny): perf error run (null perf score)?
 // TODO(bckenny): perf score? Number/percentage of errored audits?
 // TODO(bckenny): should usually ignore e.g. FAILED_DOCUMENT_REQUEST but still have all metrics?
@@ -136,6 +135,7 @@ function getExtractedTableSchema() {
     {name: 'si_value', type: 'FLOAT'},
     {name: 'tbt_value', type: 'FLOAT'},
     {name: 'tti_value', type: 'FLOAT'},
+    {name: 'cls_value', type: 'FLOAT'},
   ];
 
   return {
@@ -318,6 +318,10 @@ function getLhrExtractQuery(haTableInfo, sourceOptions) {
         ELSE
           CAST(JSON_EXTRACT_SCALAR(report, '$.audits.interactive.numericValue') AS FLOAT64)
         END AS tti_value,
+
+      # cls_value available starting in 6.0.
+      CAST(JSON_EXTRACT_SCALAR(report, '$.audits.cumulative-layout-shift.numericValue') AS FLOAT64) AS cls_value,
+
     FROM (
       SELECT
         report,
