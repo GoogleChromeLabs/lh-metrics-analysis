@@ -47,7 +47,7 @@ const DEFAULT_HA_PROJECT_ID = 'httparchive';
 const DEFAULT_HA_DATASET_ID = 'lighthouse';
 
 // TODO(bckenny): perf error run (null perf score)?
-// TODO(bckenny): perf score? Number/percentage of errored audits?
+// TODO(bckenny): Number/percentage of errored audits?
 // TODO(bckenny): should usually ignore e.g. FAILED_DOCUMENT_REQUEST but still have all metrics?
 // TODO(bckenny): should runWarning "The page loaded too slowly to finish" be considered valid metrics?
 
@@ -111,7 +111,7 @@ function getExtractedTableId({year, month}) {
 function getExtractedTableSchema() {
   /**
    * @type {Array<{
-   *   name: 'requested_url'|'final_url'|'lh_version'|'runtime_error_code'|'chrome_version'|MetricValueId,
+   *   name: 'requested_url'|'final_url'|'lh_version'|'runtime_error_code'|'chrome_version'|'performance_score'|MetricValueId,
    *   type: 'STRING'|'FLOAT',
    *   mode?: 'REQUIRED'
    * }>}
@@ -128,6 +128,7 @@ function getExtractedTableSchema() {
     // Metrics (nullable if errored).
     // For whatever reason, schema always comes back as FLOAT, even if FLOAT64
     // is set, so keep it FLOAT for now.
+    {name: 'performance_score', type: 'FLOAT'},
     {name: 'fcp_value', type: 'FLOAT'},
     {name: 'fmp_value', type: 'FLOAT'},
     {name: 'lcp_value', type: 'FLOAT'},
@@ -262,6 +263,20 @@ function getLhrExtractQuery(haTableInfo, sourceOptions) {
           # $.userAgent still works at this point, but $.environment.hostUserAgent is the intended future-proof property.
           REGEXP_EXTRACT(JSON_EXTRACT_SCALAR(report, '$.environment.hostUserAgent'), r"Chrome\\/([\\d.]+)")
         END AS chrome_version,
+
+      # performance_score
+      CASE
+        WHEN major_lh_version = 2 AND minor_lh_version < 8
+          # Originally reportCategories was an array and perf was the second element. Normalize to [0,1].
+          THEN ROUND(CAST(JSON_EXTRACT_SCALAR(report, '$.reportCategories[1].score') AS FLOAT64) / 100, 2)
+        WHEN major_lh_version < 3
+          # Perf moved to the first element of reportCategories in 2.8 (GoogleChrome/lighthouse#4095). Normalize to [0,1].
+          THEN ROUND(CAST(JSON_EXTRACT_SCALAR(report, '$.reportCategories[0].score') AS FLOAT64) / 100, 2)
+        ELSE
+          # Moved to the categories object in 3.0 (GoogleChrome/lighthouse#5155), score is in [0,1], and
+          # an error in one of the metrics makes this value null.
+          CAST(JSON_EXTRACT_SCALAR(report, '$.categories.performance.score') AS FLOAT64)
+        END AS performance_score,
 
       # fcp_value
       CASE
