@@ -382,7 +382,7 @@ describe('Extraction from HTTP Archive tables', () => {
     });
   });
 
-  describe.only('#getTotalRows', () => {
+  describe('#getTotalRows', () => {
     const bigQuery = new BigQuery(credentials);
     const haTablesData = new HaTablesData(bigQuery);
 
