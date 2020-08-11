@@ -39,6 +39,10 @@ import {assertValidProjectId, assertValidBigQueryId} from './bq-utils.js';
  * The metric values available to query.
  * @typedef {'fcp_value'|'fmp_value'|'lcp_value'|'mpfid_value'|'si_value'|'tbt_value'|'tti_value'|'cls_value'} MetricValueId
  */
+/**
+ * All the columns available to query.
+ * @typedef {'requested_url'|'final_url'|'lh_version'|'runtime_error_code'|'chrome_version'|'performance_score'|MetricValueId} ExtractedColumnId
+ */
 
 // TODO(bckenny): use in caller
 const EXTRACTED_DATASET_ID = 'lh_extract'; // eslint-disable-line no-unused-vars
@@ -111,7 +115,7 @@ function getExtractedTableId({year, month}) {
 function getExtractedTableSchema() {
   /**
    * @type {Array<{
-   *   name: 'requested_url'|'final_url'|'lh_version'|'runtime_error_code'|'chrome_version'|'performance_score'|MetricValueId,
+   *   name: ExtractedColumnId,
    *   type: 'STRING'|'FLOAT',
    *   mode?: 'REQUIRED'
    * }>}
@@ -258,10 +262,10 @@ function getLhrExtractQuery(haTableInfo, sourceOptions) {
           # $.userAgent added in 2.0.0 but was the *emulated* UA string before 2.3.0 (GoogleChrome/lighthouse#2612)
           THEN NULL
         WHEN major_lh_version < 4
-          THEN REGEXP_EXTRACT(JSON_EXTRACT_SCALAR(report, '$.userAgent'), r"Chrome\\/([\\d.]+)")
+          THEN REGEXP_EXTRACT(JSON_EXTRACT_SCALAR(report, '$.userAgent'), r"Chrome\\/(\\d+\\.\\d+\\.\\d+)")
         ELSE
           # $.userAgent still works at this point, but $.environment.hostUserAgent is the intended future-proof property.
-          REGEXP_EXTRACT(JSON_EXTRACT_SCALAR(report, '$.environment.hostUserAgent'), r"Chrome\\/([\\d.]+)")
+          REGEXP_EXTRACT(JSON_EXTRACT_SCALAR(report, '$.environment.hostUserAgent'), r"Chrome\\/(\\d+\\.\\d+\\.\\d+)")
         END AS chrome_version,
 
       # performance_score
