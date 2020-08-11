@@ -80,6 +80,16 @@ describe('HaTablesData', () => {
     });
   });
 
+  describe('#getLatestTable', () => {
+    it('returns the most recent table', async () => {
+      const tables = await haTablesData.getListOfTables();
+      const latestTable = await haTablesData.getLatestTable();
+
+      // We know tables[0] is first from getListOfTables tests.
+      assert.deepStrictEqual(latestTable, tables[0]);
+    });
+  });
+
   describe('#getMonthBefore', () => {
     it('can return the table a month before a given table', async () => {
       const tables = await haTablesData.getListOfTables();

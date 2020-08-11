@@ -25,9 +25,14 @@ const {BigQuery} = BQModule;
 
 import HaTablesData from '../../../js/big-query/ha-tables-data.js';
 import credentials from '../../../js/big-query/auth/credentials.js';
-import {extractMetricsFromHaLhrs, getExtractedTableId, assertValidYear, assertValidMonth} from
-  '../../../js/big-query/extract-from-ha-tables.js';
 import {assertValidBigQueryId} from '../../../js/big-query/bq-utils.js';
+import {
+  getExtractedTableId,
+  extractMetricsFromHaLhrs,
+  assertValidYear,
+  assertValidMonth,
+  getTotalRows,
+} from '../../../js/big-query/extract-from-ha-tables.js';
 
 import expectedExtractedTables from './expected-extracted-tables.js';
 
@@ -45,6 +50,7 @@ const sourceOptions = {
 const extractedDatasetId = 'test_lh_extract';
 
 /**
+ * Get available tables available for testing in the `test_lighthouse` dataset.
  * @param {BigQuery} bigQuery
  * @return {Promise<Array<string>>}
  */
@@ -373,6 +379,64 @@ describe('Extraction from HTTP Archive tables', () => {
           assert.strictEqual(newMetadata.numRows, existingMetadata.numRows);
         });
       });
+    });
+  });
+
+  describe('#getTotalRows', () => {
+    const bigQuery = new BigQuery(credentials);
+    const haTablesData = new HaTablesData(bigQuery);
+
+    it('throws if not using custom source tables in a testing env (like this one)', async () => {
+      const tables = await haTablesData.getListOfTables();
+      await assert.rejects(async () => {
+        return getTotalRows(bigQuery, tables[0]);
+      }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
+
+      const defaultishSourceOptions = {haProjectId: 'httparchive'};
+      await assert.rejects(async () => {
+        return getTotalRows(bigQuery, tables[0], defaultishSourceOptions);
+      }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
+    });
+
+    it('throws on an invalid table id', async () => {
+      const badTableInfo = {
+        year: 2525,
+        month: 1,
+        tableId: 'invalid-table-id',
+        extractedTableId: 'lh-extract-not-an-extracted-table-id-either',
+      };
+
+      await assert.rejects(async () => {
+        return getTotalRows(bigQuery, badTableInfo, sourceOptions);
+      }, /^Error: invalid BigQuery id 'invalid-table-id'$/);
+    });
+
+    it('throws when table info cannot be found', async () => {
+      const badTableInfo = {
+        year: 2525,
+        month: 1,
+        tableId: 'not_a_table_id',
+        extractedTableId: 'lh_extract_not_an_extracted_table_id_either',
+      };
+
+      await assert.rejects(async () => {
+        return getTotalRows(bigQuery, badTableInfo, sourceOptions);
+      }, /^Error: unable to find a row count for table 'not_a_table_id'$/);
+    });
+
+    it('returns the number of rows in a table', async () => {
+      // Sampled source tables are only available for a subset of all HTTP Archive tables.
+      const allHaTables = await haTablesData.getListOfTables();
+      const sourceTableIds = await getSourceTableIds(bigQuery);
+      const sourceTables = allHaTables.filter(t => sourceTableIds.includes(t.tableId));
+      // Use the last one so it stays fairly stable.
+      const sourceTableInfo = sourceTables[sourceTables.length - 1];
+
+      const totalRows = await getTotalRows(bigQuery, sourceTableInfo, sourceOptions);
+
+      const expectedLength = Object.values(expectedExtractedTables)[0].length;
+      assert.notStrictEqual(expectedLength, 0);
+      assert.strictEqual(totalRows, expectedLength);
     });
   });
 
