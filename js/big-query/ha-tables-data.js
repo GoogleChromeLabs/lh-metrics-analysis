@@ -93,6 +93,15 @@ export default class HaTablesData {
   }
 
   /**
+   * A convenience method that returns the most recent tableInfo available.
+   * @return {Promise<HaTableInfo>}
+   */
+  async getLatestTable() {
+    const tablesData = await this._getTablesData();
+    return tablesData[0];
+  }
+
+  /**
    * Returns the tableInfo one month before the given tableInfo, or null if one
    * doesn't exist. Month is assumed to be in [1, 12], not [0, 11] as is usual in
    * JS dates.

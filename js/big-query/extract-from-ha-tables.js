@@ -460,8 +460,8 @@ function assertValidSourceOptions(options) {
   const haProjectId = options.haProjectId ?? DEFAULT_HA_PROJECT_ID;
   const haDatasetId = options.haDatasetId ?? DEFAULT_HA_DATASET_ID;
 
-  if (haProjectId) assertValidProjectId(haProjectId);
-  if (haDatasetId) assertValidBigQueryId(haDatasetId);
+  assertValidProjectId(haProjectId);
+  assertValidBigQueryId(haDatasetId);
 
   // Querying the full HTTP Archive tables can be done but it's expensive.
   // HACK: guard against when testing.
@@ -526,9 +526,42 @@ async function extractMetricsFromHaLhrs(haTableInfo, destinationDataset, sourceO
   return extractedTable;
 }
 
+/**
+ * Returns the total number of rows in the given table.
+ * By default these are extracted from the official `httparchive.lighthouse.*`
+ * tables, but this can be overriden in `sourceOptions`.
+ * @param {BigQuery} bigQuery
+ * @param {HaTableInfo} haTableInfo
+ * @param {Partial<SourceOptions>} [sourceOptions]
+ * @return {Promise<number>}
+ */
+async function getTotalRows(bigQuery, haTableInfo, sourceOptions = {}) {
+  const {haProjectId, haDatasetId} = assertValidSourceOptions(sourceOptions);
+  const tableId = haTableInfo.tableId;
+  assertValidBigQueryId(tableId);
+
+  const rowNumQuery = `SELECT row_count AS rowCount
+    FROM \`${haProjectId}.${haDatasetId}.__TABLES__\`
+    WHERE table_id = '${tableId}'`;
+
+  const [rows] = await bigQuery.query({
+    query: rowNumQuery,
+  });
+
+  /** @type {string} */
+  const rowCount = rows[0]?.rowCount;
+  // Throw on undefined and empty string.
+  if (!rowCount) {
+    throw new Error(`unable to find a row count for table '${tableId}'`);
+  }
+
+  return Number(rowCount);
+}
+
 export {
   getExtractedTableId,
   extractMetricsFromHaLhrs,
   assertValidYear,
   assertValidMonth,
+  getTotalRows,
 };
