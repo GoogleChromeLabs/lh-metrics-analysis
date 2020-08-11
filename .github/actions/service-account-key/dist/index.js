@@ -141,6 +141,49 @@ exports.default = _default;
 
 /***/ }),
 
+/***/ 193:
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+var _default = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000)$/i;
+exports.default = _default;
+
+/***/ }),
+
+/***/ 194:
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _validate = _interopRequireDefault(__webpack_require__(486));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function version(uuid) {
+  if (!(0, _validate.default)(uuid)) {
+    throw TypeError('Invalid UUID');
+  }
+
+  return parseInt(uuid.substr(14, 1), 16);
+}
+
+var _default = version;
+exports.default = _default;
+
+/***/ }),
+
 /***/ 202:
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
 
@@ -160,6 +203,52 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 const v3 = (0, _v.default)('v3', 0x30, _md.default);
 var _default = v3;
+exports.default = _default;
+
+/***/ }),
+
+/***/ 228:
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _validate = _interopRequireDefault(__webpack_require__(486));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * Convert array of 16 byte values to UUID string format of the form:
+ * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+ */
+const byteToHex = [];
+
+for (let i = 0; i < 256; ++i) {
+  byteToHex.push((i + 0x100).toString(16).substr(1));
+}
+
+function stringify(arr, offset = 0) {
+  // Note: Be careful editing this code!  It's been tuned for performance
+  // and works in ways you may not expect. See https://github.com/uuidjs/uuid/pull/434
+  const uuid = (byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + '-' + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + '-' + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + '-' + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + '-' + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]]).toLowerCase(); // Consistency check for valid UUID.  If this throws, it's likely due to one
+  // of the following:
+  // - One or more input array values don't map to a hex octet (leading to
+  // "undefined" in the uuid)
+  // - Invalid input values for the RFC `version` or `variant` fields
+
+  if (!(0, _validate.default)(uuid)) {
+    throw TypeError('Stringified UUID is invalid');
+  }
+
+  return uuid;
+}
+
+var _default = stringify;
 exports.default = _default;
 
 /***/ }),
@@ -256,18 +345,11 @@ Object.defineProperty(exports, "__esModule", {
 exports.default = _default;
 exports.URL = exports.DNS = void 0;
 
-var _bytesToUuid = _interopRequireDefault(__webpack_require__(559));
+var _stringify = _interopRequireDefault(__webpack_require__(228));
+
+var _parse = _interopRequireDefault(__webpack_require__(469));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-function uuidToBytes(uuid) {
-  // Note: We assume we're being passed a valid uuid string
-  const bytes = [];
-  uuid.replace(/[a-fA-F0-9]{2}/g, function (hex) {
-    bytes.push(parseInt(hex, 16));
-  });
-  return bytes;
-}
 
 function stringToBytes(str) {
   str = unescape(encodeURIComponent(str)); // UTF8 escape
@@ -288,30 +370,39 @@ exports.URL = URL;
 
 function _default(name, version, hashfunc) {
   function generateUUID(value, namespace, buf, offset) {
-    const off = buf && offset || 0;
-    if (typeof value === 'string') value = stringToBytes(value);
-    if (typeof namespace === 'string') namespace = uuidToBytes(namespace);
-
-    if (!Array.isArray(value)) {
-      throw TypeError('value must be an array of bytes');
+    if (typeof value === 'string') {
+      value = stringToBytes(value);
     }
 
-    if (!Array.isArray(namespace) || namespace.length !== 16) {
-      throw TypeError('namespace must be uuid string or an Array of 16 byte values');
-    } // Per 4.3
+    if (typeof namespace === 'string') {
+      namespace = (0, _parse.default)(namespace);
+    }
+
+    if (namespace.length !== 16) {
+      throw TypeError('Namespace must be array-like (16 iterable integer values, 0-255)');
+    } // Compute hash of namespace and value, Per 4.3
+    // Future: Use spread syntax when supported on all platforms, e.g. `bytes =
+    // hashfunc([...namespace, ... value])`
 
 
-    const bytes = hashfunc(namespace.concat(value));
+    let bytes = new Uint8Array(16 + value.length);
+    bytes.set(namespace);
+    bytes.set(value, namespace.length);
+    bytes = hashfunc(bytes);
     bytes[6] = bytes[6] & 0x0f | version;
     bytes[8] = bytes[8] & 0x3f | 0x80;
 
     if (buf) {
-      for (let idx = 0; idx < 16; ++idx) {
-        buf[off + idx] = bytes[idx];
+      offset = offset || 0;
+
+      for (let i = 0; i < 16; ++i) {
+        buf[offset + i] = bytes[i];
       }
+
+      return buf;
     }
 
-    return buf || (0, _bytesToUuid.default)(bytes);
+    return (0, _stringify.default)(bytes);
   } // Function#name is not settable on some platforms (#270)
 
 
@@ -334,8 +425,8 @@ module.exports = require("crypto");
 
 /***/ }),
 
-/***/ 559:
-/***/ (function(__unusedmodule, exports) {
+/***/ 469:
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
 
 "use strict";
 
@@ -345,25 +436,67 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.default = void 0;
 
-/**
- * Convert array of 16 byte values to UUID string format of the form:
- * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
- */
-const byteToHex = [];
+var _validate = _interopRequireDefault(__webpack_require__(486));
 
-for (let i = 0; i < 256; ++i) {
-  byteToHex.push((i + 0x100).toString(16).substr(1));
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function parse(uuid) {
+  if (!(0, _validate.default)(uuid)) {
+    throw TypeError('Invalid UUID');
+  }
+
+  let v;
+  const arr = new Uint8Array(16); // Parse ########-....-....-....-............
+
+  arr[0] = (v = parseInt(uuid.slice(0, 8), 16)) >>> 24;
+  arr[1] = v >>> 16 & 0xff;
+  arr[2] = v >>> 8 & 0xff;
+  arr[3] = v & 0xff; // Parse ........-####-....-....-............
+
+  arr[4] = (v = parseInt(uuid.slice(9, 13), 16)) >>> 8;
+  arr[5] = v & 0xff; // Parse ........-....-####-....-............
+
+  arr[6] = (v = parseInt(uuid.slice(14, 18), 16)) >>> 8;
+  arr[7] = v & 0xff; // Parse ........-....-....-####-............
+
+  arr[8] = (v = parseInt(uuid.slice(19, 23), 16)) >>> 8;
+  arr[9] = v & 0xff; // Parse ........-....-....-....-############
+  // (Use "/" to avoid 32-bit truncation when bit-shifting high-order bytes)
+
+  arr[10] = (v = parseInt(uuid.slice(24, 36), 16)) / 0x10000000000 & 0xff;
+  arr[11] = v / 0x100000000 & 0xff;
+  arr[12] = v >>> 24 & 0xff;
+  arr[13] = v >>> 16 & 0xff;
+  arr[14] = v >>> 8 & 0xff;
+  arr[15] = v & 0xff;
+  return arr;
 }
 
-function bytesToUuid(buf, offset) {
-  const i = offset || 0;
-  const bth = byteToHex; // Note: Be careful editing this code!  It's been tuned for performance
-  // and works in ways you may not expect. See https://github.com/uuidjs/uuid/pull/434
+var _default = parse;
+exports.default = _default;
 
-  return (bth[buf[i + 0]] + bth[buf[i + 1]] + bth[buf[i + 2]] + bth[buf[i + 3]] + '-' + bth[buf[i + 4]] + bth[buf[i + 5]] + '-' + bth[buf[i + 6]] + bth[buf[i + 7]] + '-' + bth[buf[i + 8]] + bth[buf[i + 9]] + '-' + bth[buf[i + 10]] + bth[buf[i + 11]] + bth[buf[i + 12]] + bth[buf[i + 13]] + bth[buf[i + 14]] + bth[buf[i + 15]]).toLowerCase();
+/***/ }),
+
+/***/ 486:
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _regex = _interopRequireDefault(__webpack_require__(193));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function validate(uuid) {
+  return typeof uuid === 'string' && _regex.default.test(uuid);
 }
 
-var _default = bytesToUuid;
+var _default = validate;
 exports.default = _default;
 
 /***/ }),
@@ -617,7 +750,7 @@ exports.default = void 0;
 
 var _rng = _interopRequireDefault(__webpack_require__(884));
 
-var _bytesToUuid = _interopRequireDefault(__webpack_require__(559));
+var _stringify = _interopRequireDefault(__webpack_require__(228));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -635,7 +768,7 @@ let _lastNSecs = 0; // See https://github.com/uuidjs/uuid for API details
 
 function v1(options, buf, offset) {
   let i = buf && offset || 0;
-  const b = buf || [];
+  const b = buf || new Array(16);
   options = options || {};
   let node = options.node || _nodeId;
   let clockseq = options.clockseq !== undefined ? options.clockseq : _clockseq; // node and clockseq need to be initialized to random values if they're not
@@ -710,7 +843,7 @@ function v1(options, buf, offset) {
     b[i + n] = node[n];
   }
 
-  return buf || (0, _bytesToUuid.default)(b);
+  return buf || (0, _stringify.default)(b);
 }
 
 var _default = v1;
@@ -880,6 +1013,36 @@ Object.defineProperty(exports, "v5", {
     return _v4.default;
   }
 });
+Object.defineProperty(exports, "NIL", {
+  enumerable: true,
+  get: function () {
+    return _nil.default;
+  }
+});
+Object.defineProperty(exports, "version", {
+  enumerable: true,
+  get: function () {
+    return _version.default;
+  }
+});
+Object.defineProperty(exports, "validate", {
+  enumerable: true,
+  get: function () {
+    return _validate.default;
+  }
+});
+Object.defineProperty(exports, "stringify", {
+  enumerable: true,
+  get: function () {
+    return _stringify.default;
+  }
+});
+Object.defineProperty(exports, "parse", {
+  enumerable: true,
+  get: function () {
+    return _parse.default;
+  }
+});
 
 var _v = _interopRequireDefault(__webpack_require__(738));
 
@@ -888,6 +1051,16 @@ var _v2 = _interopRequireDefault(__webpack_require__(202));
 var _v3 = _interopRequireDefault(__webpack_require__(928));
 
 var _v4 = _interopRequireDefault(__webpack_require__(41));
+
+var _nil = _interopRequireDefault(__webpack_require__(956));
+
+var _version = _interopRequireDefault(__webpack_require__(194));
+
+var _validate = _interopRequireDefault(__webpack_require__(486));
+
+var _stringify = _interopRequireDefault(__webpack_require__(228));
+
+var _parse = _interopRequireDefault(__webpack_require__(469));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -906,16 +1079,11 @@ exports.default = void 0;
 
 var _rng = _interopRequireDefault(__webpack_require__(884));
 
-var _bytesToUuid = _interopRequireDefault(__webpack_require__(559));
+var _stringify = _interopRequireDefault(__webpack_require__(228));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function v4(options, buf, offset) {
-  if (typeof options === 'string') {
-    buf = options === 'binary' ? new Uint8Array(16) : null;
-    options = null;
-  }
-
   options = options || {};
 
   const rnds = options.random || (options.rng || _rng.default)(); // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
@@ -925,19 +1093,34 @@ function v4(options, buf, offset) {
   rnds[8] = rnds[8] & 0x3f | 0x80; // Copy bytes to buffer, if provided
 
   if (buf) {
-    const start = offset || 0;
+    offset = offset || 0;
 
     for (let i = 0; i < 16; ++i) {
-      buf[start + i] = rnds[i];
+      buf[offset + i] = rnds[i];
     }
 
     return buf;
   }
 
-  return (0, _bytesToUuid.default)(rnds);
+  return (0, _stringify.default)(rnds);
 }
 
 var _default = v4;
+exports.default = _default;
+
+/***/ }),
+
+/***/ 956:
+/***/ (function(__unusedmodule, exports) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+var _default = '00000000-0000-0000-0000-000000000000';
 exports.default = _default;
 
 /***/ })
