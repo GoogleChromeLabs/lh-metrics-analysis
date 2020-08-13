@@ -405,29 +405,6 @@ async function isExtractedTableValid(extractedTable) {
 }
 
 /**
- * Delete the given table, due to invalid schema, malformed contents, etc.
- * @param {Table} extractedTable
- * @return {Promise<void>}
- */
-async function deleteExtractedTable(extractedTable) {
-  // TODO(bckenny): useful during dev if invalid prognosis might be wrong.
-  // let deleteTable = true;
-  // const {interactiveDeleteTable} = await enquirer.prompt({
-  //   type: 'confirm',
-  //   name: 'interactiveDeleteTable',
-  //   message: 'Is this expected? Will delete if so.',
-  //   initial: true,
-  // });
-  // deleteTable = interactiveDeleteTable;
-  // if (!deleteTable) {
-  //   throw new Error(`Existing table was invalid for current use but not scheduled for deletion`);
-  // }
-
-  console.warn('  Deleting existing table...');
-  await extractedTable.delete();
-}
-
-/**
  * Create the given table and extract LHR data to it.
  * @param {Table} extractedTable
  * @param {HaTableInfo} haTableInfo
@@ -513,7 +490,8 @@ async function extractMetricsFromHaLhrs(haTableInfo, destinationDataset, sourceO
     }
 
     // Current table is invalid, so delete and recreate below.
-    await deleteExtractedTable(extractedTable);
+    console.warn('  Deleting existing table...');
+    await extractedTable.delete();
   }
 
   // If not, create new table.

@@ -24,6 +24,8 @@ import {getExtractedTableId} from './extract-from-ha-tables.js';
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
 /** @typedef {Readonly<{year: number, month: number, tableId: string, extractedTableId: string}>} HaTableInfo */
 
+// TODO(bckenny): accept an optional SourceOptions to make finding tables in other datasets easier.
+
 export default class HaTablesData {
   /**
    * The list of available HTTP Archive tables, sorted chronologically, starting
