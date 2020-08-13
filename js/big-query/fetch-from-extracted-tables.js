@@ -329,9 +329,61 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
   await fs.promises.writeFile(filename, pairedMetricCsv);
 }
 
+/**
+ * Get a collection of the unique values of `columnId` in the LHRs in the given
+ * table with a count of the occurrences of each.
+ * Returns the results directly instead of through Cloud Storage, so query is
+ * limited to columns with a limited number of possibilities.
+ * If one of the values is `null`, the returned object will have a property with
+ * a key of (the stringified) `'null'` for the count of the null values.
+ * `intermediateDataset` is the dataset used to cache tables of extracted LHRs.
+ * Reuse `intermediateDataset` wherever possible as this is the expensive step.
+ * By default these are extracted from the official `httparchive.lighthouse.*`
+ * tables, but this can be overriden in `sourceOptions`.
+ * @param {HaTableInfo} tableInfo
+ * @param {'lh_version'|'runtime_error_code'|'chrome_version'} columnId
+ * @param {Dataset} intermediateDataset
+ * @param {Partial<SourceOptions>} [sourceOptions]
+ * @return {Promise<Record<string, number>>}
+ */
+async function fetchUniqueValueCounts(tableInfo, columnId, intermediateDataset, sourceOptions) {
+  console.warn(`Fetching ${columnId} counts from extracted HTTP Archive run ` +
+      `${tableInfo.extractedTableId}`);
+
+  assertValidColumnName(columnId);
+  const {extractedTableId} = tableInfo;
+  assertValidBigQueryId(extractedTableId);
+
+  // Start by making sure target HTTP Archive runs have been extracted to intermediate tables.
+  await extractMetricsFromHaLhrs(tableInfo, intermediateDataset, sourceOptions);
+
+  const countQuery = `SELECT
+      ${columnId},
+      COUNT(*) AS count,
+    FROM
+      \`${extractedTableId}\`
+    GROUP BY
+      ${columnId}
+    ORDER BY
+      ${columnId}`;
+
+  const [rows] = await intermediateDataset.query({
+    query: countQuery,
+  });
+
+  /** @type {Array<[string, number]>} */
+  const countEntries = rows.map(t => [t[columnId], Number(t.count)]);
+
+  // NOTE: `null` gets automatically converted to a string key here, but we
+  // could switch to `Symbol.for(null)` or something if we ever need to avoid a
+  // conflict or be more explicit in handling the result.
+  return Object.fromEntries(countEntries);
+}
+
 export {
   fetchSingleTableMetric,
   getSingleSaveFilename,
   fetchPairedTablesMetric,
   getPairedSaveFilename,
+  fetchUniqueValueCounts,
 };

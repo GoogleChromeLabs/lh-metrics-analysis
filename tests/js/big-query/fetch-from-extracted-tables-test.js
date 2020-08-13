@@ -32,6 +32,7 @@ import {
   fetchPairedTablesMetric,
   getSingleSaveFilename,
   getPairedSaveFilename,
+  fetchUniqueValueCounts,
 } from '../../../js/big-query/fetch-from-extracted-tables.js';
 import {extractMetricsFromHaLhrs} from '../../../js/big-query/extract-from-ha-tables.js';
 import {PROJECT_ROOT} from '../../../js/module-utils.js';
@@ -347,6 +348,58 @@ describe('Fetching from extracted metrics tables', () => {
         // No new files have been saved alongside.
         const {length: newFileCount} = fs.readdirSync(path.dirname(savedFilename));
         assert.strictEqual(newFileCount, originalFileCount);
+      });
+    });
+
+    describe('#fetchUniqueValueCounts', () => {
+      it('throws if not using custom source tables in a testing env (like this one)', async () => {
+        await assert.rejects(async () => {
+          return fetchUniqueValueCounts(may2020TableInfo, 'lh_version', testDataset);
+        }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
+      });
+
+      it('downloads the counts of unique values in a column', async () => {
+        const lhVersionCounts = await fetchUniqueValueCounts(may2020TableInfo,
+            'lh_version', testDataset, sourceOptions);
+
+        assert.deepStrictEqual(lhVersionCounts, {
+          '5.6.0': 4,
+          '6.0.0': 4,
+        });
+      });
+
+      it('includes a \'null\' key if a `null` value was found and counted', async () => {
+        const lhVersionCounts = await fetchUniqueValueCounts(may2020TableInfo,
+          'runtime_error_code', testDataset, sourceOptions);
+
+        assert.deepStrictEqual(lhVersionCounts, {
+          'CHROME_INTERSTITIAL_ERROR': 1,
+          'ERRORED_DOCUMENT_REQUEST': 1,
+          'NO_FCP': 1,
+          'null': 4,
+          'PROTOCOL_TIMEOUT': 1,
+        });
+      });
+
+      it('throws if requesting an invalid column', async () => {
+        /** @type {'runtime_error_code'} */
+        // @ts-expect-error - lying about type to test column sanitization.
+        const columnId = 'Robert\'); DROP TABLE Students; --';
+
+        await assert.rejects(async () => {
+          return fetchUniqueValueCounts(may2020TableInfo, columnId, testDataset, sourceOptions);
+        // eslint-disable-next-line max-len
+        }, /^Error: invalid characters in BigQuery column name \('Robert'\); DROP TABLE Students; --'\)$/);
+      });
+
+      it('throws if fetching from an invalid extractedTableId', async () => {
+        /** @type {HaTableInfo} */
+        const tableInfo = {...may2020TableInfo, extractedTableId: '$$$$'};
+
+        await assert.rejects(async () => {
+          return fetchUniqueValueCounts(tableInfo, 'chrome_version', testDataset, sourceOptions);
+        // eslint-disable-next-line max-len
+        }, /^Error: invalid BigQuery id '\$\$\$\$'$/);
       });
     });
   });
