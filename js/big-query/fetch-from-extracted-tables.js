@@ -65,7 +65,7 @@ function encodeValidEtag(tableEtag) {
 /**
  * Generates an absolute path for a single-metric saved file, of the form
  * `PROJECT_ROOT/data/metricValueId/YYYY-MM.etag.csv'.
- * @param {MetricValueId} metricValueId
+ * @param {MetricValueId|'performance_score'} metricValueId
  * @param {HaTableInfo} haTableInfo
  * @param {string} tableEtag
  * @return {string}
@@ -85,7 +85,7 @@ function getSingleSaveFilename(metricValueId, haTableInfo, tableEtag) {
 /**
  * Generates an absolute path for a paired-metric saved file, of the form
  * `PROJECT_ROOT/data/metricId/paired-YYYY-MM-to-YYYY-MM.betag-cetag.csv'.
- * @param {MetricValueId} metricValueId
+ * @param {MetricValueId|'performance_score'} metricValueId
  * @param {HaTableInfo} baseTableInfo
  * @param {string} baseEtag
  * @param {HaTableInfo} compareTableInfo
@@ -119,7 +119,7 @@ function getPairedSaveFilename(metricValueId, baseTableInfo, baseEtag, compareTa
  * Query assumes it will be run in the context of an established dataset (table
  * in FROM clause isn't qualified by project/dataset).
  * @param {HaTableInfo} tableInfo
- * @param {MetricValueId} metricValueId
+ * @param {MetricValueId|'performance_score'} metricValueId
  * @return {string}
  */
 function getSingleTableMetricQuery(tableInfo, metricValueId) {
@@ -146,7 +146,7 @@ function getSingleTableMetricQuery(tableInfo, metricValueId) {
  * in FROM clause isn't qualified by project/dataset).
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
- * @param {MetricValueId} metricValueId
+ * @param {MetricValueId|'performance_score'} metricValueId
  * @return {string}
  */
 function getPairedTablesMetricQuery(baseTableInfo, compareTableInfo, metricValueId) {
@@ -185,7 +185,7 @@ function getPairedTablesMetricQuery(baseTableInfo, compareTableInfo, metricValue
  * provided dataset for saving the results, which is deleted afterwards.
  * @param {string} metricQuery
  * @param {Dataset} intermediateDataset
- * @param {MetricValueId} metricValueId For logging and easy table/file identification.
+ * @param {MetricValueId|'performance_score'} metricValueId For logging and easy table/file identification.
  * @return {Promise<Buffer>}
  */
 async function getMetricQueryResults(metricQuery, intermediateDataset, metricValueId) {
@@ -238,7 +238,7 @@ async function getMetricQueryResults(metricQuery, intermediateDataset, metricVal
  * By default these are extracted from the official `httparchive.lighthouse.*`
  * tables, but this can be overriden in `sourceOptions`.
  * @param {HaTableInfo} haTableInfo
- * @param {MetricValueId} metricValueId
+ * @param {MetricValueId|'performance_score'} metricValueId
  * @param {Dataset} intermediateDataset
  * @param {Partial<SourceOptions>} [sourceOptions]
  * @return {Promise<string>}
@@ -286,7 +286,7 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDa
  * tables, but this can be overriden in `sourceOptions`.
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
- * @param {MetricValueId} metricValueId
+ * @param {MetricValueId|'performance_score'} metricValueId
  * @param {Dataset} intermediateDataset
  * @param {Partial<SourceOptions>} [sourceOptions]
  * @return {Promise<string>}
