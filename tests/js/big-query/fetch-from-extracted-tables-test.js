@@ -230,19 +230,27 @@ describe('Fetching from extracted metrics tables', () => {
       });
 
       it('downloads a metric from a table', async () => {
-        await fetchSingleTableMetric(may2020TableInfo, metricValueId, testDataset, sourceOptions);
+        savedFilename = await fetchSingleTableMetric(may2020TableInfo, metricValueId,
+            testDataset, sourceOptions);
 
+        assert.ok(fs.existsSync(savedFilename));
+        const fileContents = fs.readFileSync(savedFilename, 'utf8');
+        assert.strictEqual(fileContents, may2020FcpValues);
+      });
+
+      // Dependent on above test being run first.
+      it('should use the same filename as #getSingleSaveFilename', async () => {
         // This should come from cache since it will have just been extracted by the above.
         const extractedTable = await extractMetricsFromHaLhrs(may2020TableInfo, testDataset,
             sourceOptions);
 
         // Get where it should have been saved.
         const [{etag}] = await extractedTable.getMetadata();
-        savedFilename = getSingleSaveFilename(metricValueId, may2020TableInfo, etag);
+        const independentSavedFilename = getSingleSaveFilename(metricValueId, may2020TableInfo,
+            etag);
 
-        assert.ok(fs.existsSync(savedFilename));
-        const fileContents = fs.readFileSync(savedFilename, 'utf8');
-        assert.strictEqual(fileContents, may2020FcpValues);
+        // We should be able to retrieve the file without going through getSingleSaveFilename.
+        assert.strictEqual(independentSavedFilename, savedFilename);
       });
 
       // Dependent on above test being run first.
@@ -302,9 +310,16 @@ describe('Fetching from extracted metrics tables', () => {
         july2018TableInfo = probjuly2018Info;
 
         // july2018TableInfo and aug2017TableInfo test tables have wikipedia in common.
-        await fetchPairedTablesMetric(aug2017TableInfo, july2018TableInfo, metricValueId,
-            testDataset, sourceOptions);
+        savedFilename = await fetchPairedTablesMetric(aug2017TableInfo, july2018TableInfo,
+            metricValueId, testDataset, sourceOptions);
 
+        assert.ok(fs.existsSync(savedFilename));
+        const fileContents = fs.readFileSync(savedFilename, 'utf8');
+        assert.strictEqual(fileContents, pairedCsvValues);
+      });
+
+      // Dependent on above test being run first.
+      it('should use the same filename as #getPairedSaveFilename', async () => {
         // These should come from cache since they will have just been extracted by the above.
         const extractedBaseTable = await extractMetricsFromHaLhrs(aug2017TableInfo, testDataset,
             sourceOptions);
@@ -314,15 +329,14 @@ describe('Fetching from extracted metrics tables', () => {
         // Get where it should have been saved.
         const [{etag: baseEtag}] = await extractedBaseTable.getMetadata();
         const [{etag: compareEtag}] = await extractedCompareTable.getMetadata();
-        savedFilename = getPairedSaveFilename(metricValueId, aug2017TableInfo, baseEtag,
-            july2018TableInfo, compareEtag);
+        const independentSavedFilename = getPairedSaveFilename(metricValueId, aug2017TableInfo,
+            baseEtag, july2018TableInfo, compareEtag);
 
-        assert.ok(fs.existsSync(savedFilename));
-        const fileContents = fs.readFileSync(savedFilename, 'utf8');
-        assert.strictEqual(fileContents, pairedCsvValues);
+        // We should be able to retrieve the file without going through fetchPairedTablesMetric.
+        assert.strictEqual(independentSavedFilename, savedFilename);
       });
 
-      // Dependent on above test being run first.
+      // Dependent on first test abvove being run first.
       it('reuses an already-downloaded file if one exists', async () => {
         assert.ok(savedFilename, 'file has not been downloaded yet');
         assert.ok(fs.existsSync(savedFilename));
@@ -333,8 +347,9 @@ describe('Fetching from extracted metrics tables', () => {
         const {length: originalFileCount} = fs.readdirSync(path.dirname(savedFilename));
 
         // Fetch again.
-        await fetchPairedTablesMetric(aug2017TableInfo, july2018TableInfo, metricValueId,
-          testDataset, sourceOptions);
+        const repeatSavedFilename = await fetchPairedTablesMetric(aug2017TableInfo,
+            july2018TableInfo, metricValueId, testDataset, sourceOptions);
+        assert.strictEqual(repeatSavedFilename, savedFilename);
         assert.ok(fs.existsSync(savedFilename));
 
         // Contents are the same.

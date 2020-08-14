@@ -241,7 +241,7 @@ async function getMetricQueryResults(metricQuery, intermediateDataset, metricVal
  * @param {MetricValueId} metricValueId
  * @param {Dataset} intermediateDataset
  * @param {Partial<SourceOptions>} [sourceOptions]
- * @return {Promise<void>}
+ * @return {Promise<string>}
  */
 async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDataset,
     sourceOptions) {
@@ -258,7 +258,7 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDa
   const filename = getSingleSaveFilename(metricValueId, haTableInfo, extractedEtag);
   if (fs.existsSync(filename)) {
     console.warn(`  ./${path.relative(PROJECT_ROOT, filename)} already saved locally. Using it!`);
-    return;
+    return filename;
   }
   // TODO(bckenny): at some point, should probably clean up old data files with old etags.
 
@@ -269,6 +269,8 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDa
   // And save to disk.
   await fs.promises.mkdir(path.dirname(filename), {recursive: true});
   await fs.promises.writeFile(filename, metricCsv);
+
+  return filename;
 }
 
 /**
@@ -287,7 +289,7 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDa
  * @param {MetricValueId} metricValueId
  * @param {Dataset} intermediateDataset
  * @param {Partial<SourceOptions>} [sourceOptions]
- * @return {Promise<void>}
+ * @return {Promise<string>}
  */
 async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricValueId,
     intermediateDataset, sourceOptions) {
@@ -313,7 +315,7 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
       compareEtag);
   if (fs.existsSync(filename)) {
     console.warn(`  ./${path.relative(PROJECT_ROOT, filename)} already saved locally. Using it!`);
-    return;
+    return filename;
   }
   // TODO(bckenny): at some point, should probably clean up old data files with old etags.
 
@@ -327,6 +329,8 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
   // And save to disk.
   await fs.promises.mkdir(path.dirname(filename), {recursive: true});
   await fs.promises.writeFile(filename, pairedMetricCsv);
+
+  return filename;
 }
 
 /**
