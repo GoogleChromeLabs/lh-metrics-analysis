@@ -29,12 +29,12 @@ jobs:
       with:
         node-version: 14.x
 
-    # Cache yarn deps. thx https://github.com/actions/cache/blob/master/examples.md#node---yarn
+    # Cache yarn deps. thx https://github.com/actions/cache/blob/main/examples.md#node---yarn
     - name: Get yarn cache directory path
       id: yarn-cache-dir-path
       run: echo "::set-output name=dir::$(yarn cache dir)"
-    - name: Set up node_modules cache
-      uses: actions/cache@v1
+    - name: Set up node_modules/ cache
+      uses: actions/cache@v2
       id: yarn-cache
       with:
         path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
@@ -61,6 +61,6 @@ jobs:
       run: yarn coverage
 
     - name: Upload test coverage to Codecov
-      uses: codecov/codecov-action@e16d515
+      uses: codecov/codecov-action@fadbb25
       with:
         file: ./coverage/lcov.info

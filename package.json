@@ -29,26 +29,26 @@
   },
   "homepage": "https://github.com/GoogleChromeLabs/lh-metrics-analysis#readme",
   "dependencies": {
-    "@google-cloud/bigquery": "^5.1.0",
+    "@google-cloud/bigquery": "^5.2.0",
     "@google-cloud/storage": "^5.2.0",
     "commander": "^6.0.0",
-    "enquirer": "^2.3.5",
+    "enquirer": "^2.3.6",
     "es-main": "^1.0.2",
-    "uuid": "^8.1.0",
+    "uuid": "^8.3.0",
     "xorshift": "^1.1.1"
   },
   "devDependencies": {
     "@actions/core": "1.2.4",
-    "@types/mocha": "^7.0.2",
-    "@types/node": "^14.0.13",
-    "@types/uuid": "^8.0.0",
-    "@zeit/ncc": "0.22.3",
+    "@types/mocha": "^8.0.2",
+    "@types/node": "^14.0.27",
+    "@types/uuid": "^8.3.0",
+    "@vercel/ncc": "^0.23.0",
     "babel-eslint": "^10.1.0",
-    "c8": "^7.2.0",
+    "c8": "^7.3.0",
     "csv-spectrum": "^1.0.0",
-    "eslint": "7.2.0",
+    "eslint": "7.6.0",
     "eslint-config-google": "0.14.0",
-    "mocha": "^8.0.1",
-    "typescript": "^3.9.5"
+    "mocha": "^8.1.1",
+    "typescript": "^3.9.7"
   }
 }
