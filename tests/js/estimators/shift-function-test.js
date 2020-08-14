@@ -20,21 +20,38 @@ import {strict as assert} from 'assert';
 import fs from 'fs';
 import path from 'path';
 
-import {getShiftCsv, getPrettyPrintedShiftData} from '../../../js/estimators/shift-function.js';
+import {
+  getShiftFunctionDeciles,
+  getPrettyPrintedShiftData,
+} from '../../../js/estimators/shift-function.js';
 import {PROJECT_ROOT} from '../../../js/module-utils.js';
 
 // Path for a temporary generated test file. Always deleted at end of test run.
 const tmpTestFilePath = PROJECT_ROOT + '/tests/fixtures/test-file-2525-99-to-2525-98.csv';
 
-// Simple test data.
+// Generate simple test data.
 let zeroHundredTestCsv = 'base,compare\n';
 for (let i = 0; i < 100; i++) {
   zeroHundredTestCsv += `0,${i + 0.5}\n`;
 }
 
+const zeroToHundredTestExpected = [
+  /* eslint-disable max-len */
+  {q: 0.1, compare: 10.00000000169774, base: 0, difference: 10.00000000169774, ciLower: 2.6376276787763526, ciUpper: 17.36237232461913},
+  {q: 0.2, compare: 19.999999999999986, base: 0, difference: 19.999999999999986, ciLower: 9.199497314209058, ciUpper: 30.800502685790914},
+  {q: 0.3, compare: 30.000000000000007, base: 0, difference: 30.000000000000007, ciLower: 17.424605533578074, ciUpper: 42.57539446642194},
+  {q: 0.4, compare: 40, base: 0, difference: 40, ciLower: 27.419849872070067, ciUpper: 52.58015012792993},
+  {q: 0.5, compare: 50.000000000000014, base: 0, difference: 50.000000000000014, ciLower: 37.3820818103623, ciUpper: 62.61791818963773},
+  {q: 0.6, compare: 60.00000000000001, base: 0, difference: 60.00000000000001, ciLower: 47.557865710113084, ciUpper: 72.44213428988692},
+  {q: 0.7, compare: 70.00000000000004, base: 0, difference: 70.00000000000004, ciLower: 58.539500702034275, ciUpper: 81.46049929796581},
+  {q: 0.8, compare: 79.99999999999994, base: 0, difference: 79.99999999999994, ciLower: 69.9324477574252, ciUpper: 90.06755224257469},
+  {q: 0.9, compare: 89.99999999830226, base: 0, difference: 89.99999999830226, ciLower: 82.3291911855664, ciUpper: 97.67080881103811},
+  /* eslint-enable max-len */
+];
+
 // Simple test expectations if non-random seed.
-const zeroToHundredTestExpected =
-`q,base,compare,difference,ci_lower,ci_upper
+const zeroToHundredTestExpectedCsv =
+`q,base,compare,difference,ciLower,ciUpper
 0.1,0,10.00000000169774,10.00000000169774,2.6376276787763526,17.36237232461913
 0.2,0,19.999999999999986,19.999999999999986,9.199497314209058,30.800502685790914
 0.3,0,30.000000000000007,30.000000000000007,17.424605533578074,42.57539446642194
@@ -78,21 +95,27 @@ describe('Shift Function', () => {
   it('calculates the shift function from sample data', async () => {
     fs.writeFileSync(tmpTestFilePath, zeroHundredTestCsv);
 
-    const beforeNumCacheFiles = getCacheFiles(tmpTestFilePath).length;
-    const shiftCsv = await getShiftCsv(tmpTestFilePath, {quiet: true});
-    const afterNumCacheFiles = getCacheFiles(tmpTestFilePath).length;
-    assert.strictEqual(shiftCsv, zeroToHundredTestExpected);
-    assert.strictEqual(afterNumCacheFiles, beforeNumCacheFiles + 1);
+    const beforeCacheFiles = getCacheFiles(tmpTestFilePath);
+    const shiftResults = await getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
+    const afterCacheFiles = getCacheFiles(tmpTestFilePath);
+    assert.deepStrictEqual(shiftResults, zeroToHundredTestExpected);
+    assert.strictEqual(afterCacheFiles.length, beforeCacheFiles.length + 1);
+
+    // We know from length assertion there is one.
+    const newCacheFile = afterCacheFiles.filter(f => !beforeCacheFiles.includes(f))[0];
+    const cachePath = `${path.dirname(tmpTestFilePath)}/${newCacheFile}`;
+    const savedCsv = fs.readFileSync(cachePath, 'utf-8');
+    assert.strictEqual(savedCsv, zeroToHundredTestExpectedCsv);
   });
 
   it('reads from cache if calculating from the same sample data', async () => {
     fs.writeFileSync(tmpTestFilePath, zeroHundredTestCsv);
 
     const beforeNumCacheFiles = getCacheFiles(tmpTestFilePath).length;
-    const shiftCsv = await getShiftCsv(tmpTestFilePath, {quiet: true});
+    const shiftResults = await getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
     const afterNumCacheFiles = getCacheFiles(tmpTestFilePath).length;
-    assert.strictEqual(shiftCsv, zeroToHundredTestExpected);
-    assert.strictEqual(afterNumCacheFiles, beforeNumCacheFiles, 'a new cache file were generated');
+    assert.deepStrictEqual(shiftResults, zeroToHundredTestExpected);
+    assert.strictEqual(afterNumCacheFiles, beforeNumCacheFiles, 'a new cache file was generated');
   });
 
   it('calculates the shift function with random seed without caching', async () => {
@@ -100,19 +123,20 @@ describe('Shift Function', () => {
     const relativePath = path.relative(PROJECT_ROOT, tmpTestFilePath);
 
     const beforeNumCacheFiles = getCacheFiles(tmpTestFilePath).length;
-    const shiftCsv = await getShiftCsv(relativePath, {useRandomSeed: true, quiet: true});
+    const shiftResults = await getShiftFunctionDeciles(relativePath,
+        {useRandomSeed: true, quiet: true});
     const afterNumCacheFiles = getCacheFiles(tmpTestFilePath).length;
-    assert.notStrictEqual(shiftCsv, zeroToHundredTestExpected);
-    assert.strictEqual(afterNumCacheFiles, beforeNumCacheFiles, 'a new cache file were generated');
+    assert.notDeepStrictEqual(shiftResults, zeroToHundredTestExpected);
+    assert.strictEqual(afterNumCacheFiles, beforeNumCacheFiles, 'a new cache file was generated');
   });
 
   it('calculates the shift function and creates a new cache if nboot is changed', async () => {
     fs.writeFileSync(tmpTestFilePath, zeroHundredTestCsv);
 
     const beforeNumCacheFiles = getCacheFiles(tmpTestFilePath).length;
-    const shiftCsv = await getShiftCsv(tmpTestFilePath, {quiet: true, nboot: 1});
+    const shiftResults = await getShiftFunctionDeciles(tmpTestFilePath, {quiet: true, nboot: 1});
     const afterNumCacheFiles = getCacheFiles(tmpTestFilePath).length;
-    assert.notStrictEqual(shiftCsv, zeroToHundredTestExpected);
+    assert.notDeepStrictEqual(shiftResults, zeroToHundredTestExpected);
     assert.strictEqual(afterNumCacheFiles, beforeNumCacheFiles + 1,
         'a new cache file was not generated');
   });
@@ -123,7 +147,7 @@ describe('Shift Function', () => {
       fs.writeFileSync(tmpTestFilePath, testCsv);
 
       await assert.rejects(async () => {
-        return getShiftCsv(tmpTestFilePath, {quiet: true});
+        return getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
       }, /^Error: First column must be named 'base' \('bernard' found\)$/);
     });
 
@@ -132,7 +156,7 @@ describe('Shift Function', () => {
       fs.writeFileSync(tmpTestFilePath, testCsv);
 
       await assert.rejects(async () => {
-        return getShiftCsv(tmpTestFilePath, {quiet: true});
+        return getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
       }, /^Error: Second column must be named 'compare' \('othercolumn' found\)$/);
     });
 
@@ -141,7 +165,7 @@ describe('Shift Function', () => {
       fs.writeFileSync(tmpTestFilePath, testCsv);
 
       await assert.rejects(async () => {
-        return getShiftCsv(tmpTestFilePath, {quiet: true});
+        return getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
       }, /^Error: CSV must have only 'base' and 'compare' columns$/);
     });
 
@@ -150,7 +174,7 @@ describe('Shift Function', () => {
       fs.writeFileSync(tmpTestFilePath, testCsv);
 
       await assert.rejects(async () => {
-        return getShiftCsv(tmpTestFilePath, {quiet: true});
+        return getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
       }, /^Error: bad 'base' value 'NaN'$/);
     });
 
@@ -159,7 +183,7 @@ describe('Shift Function', () => {
       fs.writeFileSync(tmpTestFilePath, testCsv);
 
       await assert.rejects(async () => {
-        return getShiftCsv(tmpTestFilePath, {quiet: true});
+        return getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
       }, /^Error: missing 'base' value$/);
     });
 
@@ -168,7 +192,7 @@ describe('Shift Function', () => {
       fs.writeFileSync(tmpTestFilePath, testCsv);
 
       await assert.rejects(async () => {
-        return getShiftCsv(tmpTestFilePath, {quiet: true});
+        return getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
       }, /^Error: missing 'compare' value$/);
     });
 
@@ -177,7 +201,7 @@ describe('Shift Function', () => {
       fs.writeFileSync(tmpTestFilePath, testCsv);
 
       await assert.rejects(async () => {
-        return getShiftCsv(tmpTestFilePath, {quiet: true});
+        return getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
       }, /^Error: bad 'compare' value 'NaN'$/);
     });
 
@@ -186,7 +210,7 @@ describe('Shift Function', () => {
       fs.writeFileSync(tmpTestFilePath, testCsv);
 
       await assert.rejects(async () => {
-        return getShiftCsv(tmpTestFilePath, {quiet: true});
+        return getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
       }, /^Error: line shorter than two columns$/);
     });
 
@@ -195,7 +219,7 @@ describe('Shift Function', () => {
       fs.writeFileSync(tmpTestFilePath, testCsv);
 
       await assert.rejects(async () => {
-        return getShiftCsv(tmpTestFilePath, {quiet: true});
+        return getShiftFunctionDeciles(tmpTestFilePath, {quiet: true});
       }, /^Error: line longer than two columns$/);
     });
   });
@@ -208,7 +232,7 @@ describe('Shift Function', () => {
         const inputPath = 555;
 
         await assert.rejects(async () => {
-          return getShiftCsv(inputPath, {quiet: true});
+          return getShiftFunctionDeciles(inputPath, {quiet: true});
         }, /^Error: supplied path '555' must be a string$/);
       });
 
@@ -216,7 +240,7 @@ describe('Shift Function', () => {
         const inputPath = 'test-data.json';
 
         await assert.rejects(async () => {
-          return getShiftCsv(inputPath, {quiet: true});
+          return getShiftFunctionDeciles(inputPath, {quiet: true});
         }, /^Error: file 'test-data\.json' doesn't appear to be a csv file$/);
       });
 
@@ -224,7 +248,7 @@ describe('Shift Function', () => {
         const inputPath = 'not-a-real-file.csv';
 
         await assert.rejects(async () => {
-          return getShiftCsv(inputPath, {quiet: true});
+          return getShiftFunctionDeciles(inputPath, {quiet: true});
         // eslint-disable-next-line max-len
         }, /^Error: Unable to locate 'not-a-real-file\.csv'.*not-a-real-file\.csv\n.*lh-metrics-analysis\/not-a-real-file.csv$/s);
       });
@@ -241,25 +265,25 @@ describe('Shift Function', () => {
         // @ts-expect-error - intentionally type breaking for test.
         const options = {nboot: true, quiet: true};
 
-        await assert.rejects(async () => getShiftCsv(tmpTestFilePath, options),
+        await assert.rejects(async () => getShiftFunctionDeciles(tmpTestFilePath, options),
             /^Error: invalid nboot value \('true'\)$/);
       });
 
       it('throws on invalid numeric nboots', async () => {
         await assert.rejects(async () => {
-          return getShiftCsv(tmpTestFilePath, {nboot: NaN, quiet: true});
+          return getShiftFunctionDeciles(tmpTestFilePath, {nboot: NaN, quiet: true});
         }, /^Error: nboot value \('NaN'\) is not a positive integer$/);
 
         await assert.rejects(async () => {
-          return getShiftCsv(tmpTestFilePath, {nboot: -1, quiet: true});
+          return getShiftFunctionDeciles(tmpTestFilePath, {nboot: -1, quiet: true});
         }, /^Error: nboot value \('-1'\) is not a positive integer$/);
 
         await assert.rejects(async () => {
-          return getShiftCsv(tmpTestFilePath, {nboot: 2.5, quiet: true});
+          return getShiftFunctionDeciles(tmpTestFilePath, {nboot: 2.5, quiet: true});
         }, /^Error: nboot value \('2\.5'\) is not a positive integer$/);
 
         await assert.rejects(async () => {
-          return getShiftCsv(tmpTestFilePath, {nboot: '2 nboots', quiet: true});
+          return getShiftFunctionDeciles(tmpTestFilePath, {nboot: '2 nboots', quiet: true});
         }, /^Error: nboot value \('2 nboots'\) is not a positive integer$/);
       });
     });
