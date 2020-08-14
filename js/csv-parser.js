@@ -140,6 +140,77 @@ class CsvParser {
 
     return rows;
   }
+
+  /**
+   * A strict CSV parser that constructs an array with rows as its elements,
+   * each row transformed into a record with only number values. e.g.
+   * `a,b\n1,2\n3,4` -> `[{a: 1, b: 2}, {a: 3, b: 4}]`.
+   * Current implementation requires declaring the expected headers ahead of
+   * time, allowing for a fully described return type.
+   * This implementation is slower and uses considerably more storage, so most
+   * useful for smaller CSV files.
+   * @template {string} T
+   * @param {string} text
+   * @param {Array<T>} expectedHeaders
+   * @return {Array<Record<T, number>>}
+   */
+  static parseToNumericRecords(text, expectedHeaders) {
+    const tokenizer = new CsvParser(text);
+
+    // Check column headers.
+    for (let i = 0; i < expectedHeaders.length; i++) {
+      const expectedHeader = expectedHeaders[i];
+      if (tokenizer.eol) {
+        throw new Error(`header row cut off before expected '${expectedHeader}' column`);
+      }
+
+      const headerToken = tokenizer.getToken();
+      if (headerToken !== expectedHeader) {
+        throw new Error(`column ${i} must be named '${expectedHeader}' ('${headerToken}' found)`);
+      }
+    }
+
+    if (!tokenizer.eol) {
+      throw new Error(`CSV must have only expected '${expectedHeaders.join(',')}' columns`);
+    }
+
+    const numberOfColumns = expectedHeaders.length;
+    const records = [];
+    let rowNumber = 1;
+    while (!tokenizer.eof) {
+      /** @type {Partial<Record<T, number>>} */
+      const record = {};
+
+      for (let i = 0; i < numberOfColumns; i++) {
+        const header = expectedHeaders[i];
+
+        const token = tokenizer.getToken();
+        if (token.length === 0) {
+          throw new Error(`missing value in column '${header}', row ${rowNumber}`);
+        }
+        const value = Number(token);
+        // NOTE: throwing on NaN or Infinity may not make sense in all circumstances.
+        if (!Number.isFinite(value)) {
+          throw new Error(`bad value '${token}' in column '${header}', row ${rowNumber}`);
+        }
+        record[header] = value;
+
+        if (i < numberOfColumns - 1 && tokenizer.eol) {
+          throw new Error(`row ${rowNumber} is shorter than expected ${numberOfColumns} columns`);
+        }
+      }
+
+      if (!tokenizer.eol) {
+        throw new Error(`row ${rowNumber} is longer than expected ${numberOfColumns} columns`);
+      }
+
+      // Since we require all columns to be present, we can be confident in this cast.
+      records.push(/** @type {Record<T, number>} */ (record));
+      rowNumber++;
+    }
+
+    return records;
+  }
 }
 
 export {
