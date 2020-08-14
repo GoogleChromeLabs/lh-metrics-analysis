@@ -255,4 +255,86 @@ describe('CsvParser', () => {
       }
     });
   });
+
+  describe('parseToNumericRecords', () => {
+    it('parses a basic example', () => {
+      const parsedRecords = CsvParser.parseToNumericRecords('c1,c2\n1,2\n3,4', ['c1', 'c2']);
+      assert.deepStrictEqual(parsedRecords, [
+        {c1: 1, c2: 2},
+        {c1: 3, c2: 4},
+      ]);
+    });
+
+    it('parses the basic example with quotes', () => {
+      const parsedRecords = CsvParser.parseToNumericRecords('c1,"c2"\n"1",2\n3,"4"', ['c1', 'c2']);
+      assert.deepStrictEqual(parsedRecords, [
+        {c1: 1, c2: 2},
+        {c1: 3, c2: 4},
+      ]);
+    });
+
+    it('parses the basic example with an ending newline', () => {
+      const parsedRecords = CsvParser.parseToNumericRecords('c1,c2\n1,2\n3,4\n', ['c1', 'c2']);
+      assert.deepStrictEqual(parsedRecords, [
+        {c1: 1, c2: 2},
+        {c1: 3, c2: 4},
+      ]);
+    });
+
+    it('parses the basic example with an different newlines', () => {
+      const parsedRecords = CsvParser.parseToNumericRecords('c1,c2\r\n1,2\r3,4\n', ['c1', 'c2']);
+      assert.deepStrictEqual(parsedRecords, [
+        {c1: 1, c2: 2},
+        {c1: 3, c2: 4},
+      ]);
+    });
+
+    it('throws if fewer column headers than expected', () => {
+      assert.throws(() => {
+        CsvParser.parseToNumericRecords('c1\n1\n3', ['c1', 'c2']);
+      }, /^Error: header row cut off before expected 'c2' column$/);
+    });
+
+    it('throws if columns have different names than those declared', () => {
+      assert.throws(() => {
+        CsvParser.parseToNumericRecords('aaa,bbb\n1,2\n3,4', ['c1', 'c2']);
+      }, /^Error: column 0 must be named 'c1' \('aaa' found\)$/);
+    });
+
+    it('throws if there are more column headers than those declared', () => {
+      assert.throws(() => {
+        CsvParser.parseToNumericRecords('c1,c2,c3\n1,2,3\n4,5,6', ['c1', 'c2']);
+      }, /^Error: CSV must have only expected 'c1,c2' columns$/);
+    });
+
+    it('throws if a row is missing a value', () => {
+      assert.throws(() => {
+        CsvParser.parseToNumericRecords('c1,c2,c3\n1,2,3\n4,,6', ['c1', 'c2', 'c3']);
+      }, /^Error: missing value in column 'c2', row 2$/);
+    });
+
+    it('throws if a row has a non-numeric value in it', () => {
+      assert.throws(() => {
+        CsvParser.parseToNumericRecords('c1,c2,c3\n1,2,3\n4,5,ccc', ['c1', 'c2', 'c3']);
+      }, /^Error: bad value 'ccc' in column 'c3', row 2$/);
+    });
+
+    it('throws if a row has a NaN in it', () => {
+      assert.throws(() => {
+        CsvParser.parseToNumericRecords('c1,c2,c3\nNaN,2,3\n4,5,6', ['c1', 'c2', 'c3']);
+      }, /^Error: bad value 'NaN' in column 'c1', row 1$/);
+    });
+
+    it('throws if a row does not have all its columns', () => {
+      assert.throws(() => {
+        CsvParser.parseToNumericRecords('c1,c2,c3\n1,2,3\n4', ['c1', 'c2', 'c3']);
+      }, /^Error: row 2 is shorter than expected 3 columns$/);
+    });
+
+    it('throws if a row has more than the expected number of columns', () => {
+      assert.throws(() => {
+        CsvParser.parseToNumericRecords('c1,c2,c3\n1,2,3,17\n4,5,6', ['c1', 'c2', 'c3']);
+      }, /^Error: row 1 is longer than expected 3 columns$/);
+    });
+  });
 });
