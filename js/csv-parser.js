@@ -147,8 +147,8 @@ class CsvParser {
    * `a,b\n1,2\n3,4` -> `[{a: 1, b: 2}, {a: 3, b: 4}]`.
    * Current implementation requires declaring the expected headers ahead of
    * time, allowing for a fully described return type.
-   * This implementation is slower and uses considerably more storage, so most
-   * useful for smaller CSV files.
+   * Using full objects per row is slower and uses considerably more space than
+   * e.g. a record of columns, so most useful for smaller CSV files.
    * @template {string} T
    * @param {string} text
    * @param {Array<T>} expectedHeaders

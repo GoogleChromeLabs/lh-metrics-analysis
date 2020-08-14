@@ -80,8 +80,8 @@ function getPrettyPrintedShiftData(dataByQuantile) {
  * @param {Array<ShiftQuantile>} dataByQuantile
  * @return {string}
  */
-function getShiftAsCsv(dataByQuantile) {
-  let str = 'q,base,compare,difference,ci_lower,ci_upper\n';
+function getCsvPrintedShiftData(dataByQuantile) {
+  let str = 'q,base,compare,difference,ciLower,ciUpper\n';
 
   for (const d of dataByQuantile) {
     str += `${d.q},${d.base},${d.compare},${d.difference},${d.ciLower},${d.ciUpper}\n`;
@@ -252,9 +252,9 @@ function parseNboot(nbootFlag) {
 /**
  * @param {string} inputPath
  * @param {{nboot?: number | string, useRandomSeed?: boolean, quiet?: boolean}} [options]
- * @return {Promise<string>}
+ * @return {Promise<Array<ShiftQuantile>>}
  */
-async function getShiftCsv(inputPath,
+async function getShiftFunctionDeciles(inputPath,
     {nboot: inputNboot, useRandomSeed: inputUseRandomSeed, quiet: inputQuiet} = {}) {
   // We don't trust input (due to CLI args really being `any`), so treat them as
   // `unknown`. Types are left on params for type checking of programmatic calls.
@@ -269,8 +269,7 @@ async function getShiftCsv(inputPath,
       /* c8 ignore next 2 */
       console.warn('Using a random seed for sampling; forgoing cache...');
     }
-    const shiftResult = await calculateShift(filePath, {nboot, quiet});
-    return getShiftAsCsv(shiftResult);
+    return calculateShift(filePath, {nboot, quiet});
   }
 
   // With a fixed seed, can use a cached result if available.
@@ -286,26 +285,28 @@ async function getShiftCsv(inputPath,
       /* c8 ignore next 2 */
       console.warn(`Cached shift-function results exist at '${cachePath}'. Using...`);
     }
-    return fs.promises.readFile(cachePath, 'utf-8');
+    const csvText = await fs.promises.readFile(cachePath, 'utf-8');
+    return CsvParser.parseToNumericRecords(csvText,
+        ['q', 'base', 'compare', 'difference', 'ciLower', 'ciUpper']);
   }
 
   // Calculate anew and cache the result.
   const shiftResult = await calculateShift(filePath, shiftOptions);
-  const shiftAsCsv = getShiftAsCsv(shiftResult);
+  const shiftAsCsv = getCsvPrintedShiftData(shiftResult);
   if (!quiet) {
     /* c8 ignore next 2 */
     console.warn(`Caching shift-function results at '${cachePath}'...`);
   }
   await fs.promises.writeFile(cachePath, shiftAsCsv);
 
-  return shiftAsCsv;
+  return shiftResult;
 }
 
 // TODO(bckenny): move out into shift-function-bin.js and drop es-main?
 /**
  * Parse arguments and run from the command line.
  */
-/* c8 ignore next 34 */
+/* c8 ignore next 35 */
 async function run() {
   // until we have `--unhandled-rejections=strict` by default.
   process.on('unhandledRejection', err => {
@@ -331,18 +332,19 @@ async function run() {
   const parsedFlags = commander.opts();
 
   // Get csv and write to stdout.
-  const shiftAsCsv = await getShiftCsv(parsedFlags.input, {
+  const shiftResults = await getShiftFunctionDeciles(parsedFlags.input, {
     nboot: parsedFlags.nboot,
     useRandomSeed: parsedFlags.randomSeed,
     quiet: parsedFlags.quiet,
   });
 
+  const shiftAsCsv = getCsvPrintedShiftData(shiftResults);
   // eslint-disable-next-line no-console
   console.log(shiftAsCsv);
 }
 
 export {
-  getShiftCsv,
+  getShiftFunctionDeciles,
   getPrettyPrintedShiftData,
 };
 
