@@ -29,10 +29,10 @@
   },
   "homepage": "https://github.com/GoogleChromeLabs/lh-metrics-analysis#readme",
   "dependencies": {
-    "@google-cloud/bigquery": "^5.1.0",
+    "@google-cloud/bigquery": "^5.2.0",
     "@google-cloud/storage": "^5.2.0",
     "commander": "^6.0.0",
-    "enquirer": "^2.3.5",
+    "enquirer": "^2.3.6",
     "es-main": "^1.0.2",
     "uuid": "^8.3.0",
     "xorshift": "^1.1.1"
