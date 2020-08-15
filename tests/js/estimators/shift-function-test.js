@@ -299,8 +299,10 @@ describe('Shift Function', () => {
       ];
       const prettyPrinted = getPrettyPrintedShiftData(shiftData);
       assert.strictEqual(prettyPrinted,
-        '| p10 | 11.1 | 12.3 | 1.2ms (95% CI [1.1, 2.2]) |\n' +
-        '| p20 | 22.2 | 67.9 | 45.7ms (95% CI [40, 50]) |\n');
+        '| deciles | base | compare | change |\n' +
+        '| --- | --- | --- | --- |\n' +
+        '| p10 | 11.1 | **12.3** | 1.2 _(95% CI [1.1, 2.2])_ |\n' +
+        '| p20 | 22.2 | **67.9** | 45.7 _(95% CI [40, 50])_ |\n');
     });
   });
 });

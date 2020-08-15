@@ -49,27 +49,49 @@ const DEFAULT_NBOOT = 200;
  * @param {number=} digits The number of digits to appear after the decimal point. Default 1.
  */
 function ciToApaString(value, ciLow, ciHigh, units = '', digits = 1) {
-  const valueStr = value.toLocaleString(undefined, {maximumFractionDigits: digits});
-  const ciLowStr = ciLow.toLocaleString(undefined, {maximumFractionDigits: digits});
-  const ciHighStr = ciHigh.toLocaleString(undefined, {maximumFractionDigits: digits});
+  // toLocaleString will happily round to and print '-0', which is not really
+  // what you want to pretty print. Working around that is awkward.
+  let valueStr = value.toLocaleString(undefined, {maximumFractionDigits: digits});
+  valueStr = valueStr === '-0' ? '0' : valueStr;
+  let ciLowStr = ciLow.toLocaleString(undefined, {maximumFractionDigits: digits});
+  ciLowStr = ciLowStr === '-0' ? '0' : ciLowStr;
+  let ciHighStr = ciHigh.toLocaleString(undefined, {maximumFractionDigits: digits});
+  ciHighStr = ciHighStr === '-0' ? '0' : ciHighStr;
 
-  return `${valueStr}${units} (95% CI [${ciLowStr}, ${ciHighStr}])`;
+  return `${valueStr}${units} _(95% CI [${ciLowStr}, ${ciHighStr}])_`;
 }
 
 /**
  * Pretty-print the shift function data. Compatible with markdown tables.
  * @param {Array<ShiftQuantile>} dataByQuantile
+ * @param {{baseName?: string, compareName?: string, digits?: number, units?: string, multiplier?: number}} [options]
  * @return {string}
  */
-function getPrettyPrintedShiftData(dataByQuantile) {
-  let str = '';
+function getPrettyPrintedShiftData(dataByQuantile, options = {}) {
+  const {
+    baseName = 'base',
+    compareName = 'compare',
+    digits = 1,
+    units = '',
+    multiplier = 1,
+  } = options;
+
+  let str = `| deciles | ${baseName} | ${compareName} | change |\n` +
+      '| --- | --- | --- | --- |\n';
+
   for (const data of dataByQuantile) {
     const quantile = 'p' + Math.round(data.q * 10) + '0';
-    const baseStr = data.base.toLocaleString(undefined, {maximumFractionDigits: 1});
-    const compareSt = data.compare.toLocaleString(undefined, {maximumFractionDigits: 1});
-    const ciString = ciToApaString(data.difference, data.ciLower, data.ciUpper, 'ms');
+    const baseValue = data.base * multiplier;
+    const baseStr = baseValue.toLocaleString(undefined, {maximumFractionDigits: digits});
+    const compareValue = data.compare * multiplier;
+    const compareStr = compareValue.toLocaleString(undefined, {maximumFractionDigits: digits});
 
-    str += `| ${quantile} | ${baseStr} | ${compareSt} | ${ciString} |\n`;
+    const difference = data.difference * multiplier;
+    const ciLower = data.ciLower * multiplier;
+    const ciUpper = data.ciUpper * multiplier;
+    const ciString = ciToApaString(difference, ciLower, ciUpper, units, digits);
+
+    str += `| ${quantile} | ${baseStr} | **${compareStr}** | ${ciString} |\n`;
   }
 
   return str;
