@@ -49,10 +49,14 @@ const DEFAULT_NBOOT = 200;
  * @param {number=} digits The number of digits to appear after the decimal point. Default 1.
  */
 function ciToApaString(value, ciLow, ciHigh, units = '', digits = 1) {
+  const valueStr = value.toLocaleString(undefined, {
+    maximumFractionDigits: digits,
+    // @ts-expect-error - Always show ± sign, except when zero. Option not yet in d.ts.
+    signDisplay: 'exceptZero',
+  });
+
   // toLocaleString will happily round to and print '-0', which is not really
   // what you want to pretty print. Working around that is awkward.
-  let valueStr = value.toLocaleString(undefined, {maximumFractionDigits: digits});
-  valueStr = valueStr === '-0' ? '0' : valueStr;
   let ciLowStr = ciLow.toLocaleString(undefined, {maximumFractionDigits: digits});
   ciLowStr = ciLowStr === '-0' ? '0' : ciLowStr;
   let ciHighStr = ciHigh.toLocaleString(undefined, {maximumFractionDigits: digits});
