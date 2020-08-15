@@ -27,6 +27,7 @@ import HaTablesData from '../big-query/ha-tables-data.js';
 import {PROJECT_ROOT} from '../module-utils.js';
 import {getTableSummarySection} from './tables-summary.js';
 import {fetchPairedTablesMetric} from '../big-query/fetch-from-extracted-tables.js';
+import {getShiftFunctionDeciles, getPrettyPrintedShiftData} from '../estimators/shift-function.js';
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
@@ -45,17 +46,39 @@ function writeLn(txt) {
 }
 
 /**
+ * Get the written name of the table's month.
+ * @param {HaTableInfo} tableInfo
+ */
+function getMonthName({year, month}) {
+  const date = new Date(year, month - 1, 1);
+  return date.toLocaleString(undefined, {month: 'long'});
+}
+
+/**
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
  * @param {Dataset} dataset
+ * @param {string} description
  * @return {Promise<string>}
  */
-async function getPerfScoreComparison(baseTableInfo, compareTableInfo, dataset) {
-  // TODO(bckenny): get array/object, not csv back from shift-function
-  //   - probably requires writing a csv loader for cached value
-  // TODO(bckenny): return pretty-printed form of shift-function results.
-  const csvFilename = await fetchPairedTablesMetric(baseTableInfo, compareTableInfo,
+async function getPerfScoreComparison(baseTableInfo, compareTableInfo, dataset, description) {
+  const pairedScoreFilename = await fetchPairedTablesMetric(baseTableInfo, compareTableInfo,
       'performance_score', dataset);
+  const shiftResults = await getShiftFunctionDeciles(pairedScoreFilename, {quiet: false});
+
+  const baseName = `${getMonthName(baseTableInfo)} ${baseTableInfo.year}`;
+  const compareName = `${getMonthName(compareTableInfo)} ${compareTableInfo.year}`;
+
+  const prettyPrinted = getPrettyPrintedShiftData(shiftResults, {
+    baseName,
+    compareName,
+    multiplier: 100, // Scale score from [0, 1] to [0, 100].
+  });
+
+  // TODO(bckenny): print number of paired records
+
+  return `#### ${baseName} vs ${compareName} (${description})\n
+${prettyPrinted}`;
 }
 
 /**
@@ -81,14 +104,24 @@ async function run() {
 
   const tableSummary = await getTableSummarySection(extractedDataset,
     {tableInfo: latestTable, description: 'latest'},
-    {tableInfo: lastMonth, description: 'month-over-month'},
-    {tableInfo: lastYear, description: 'year-over-year'});
+    {tableInfo: lastMonth, description: 'one month prior'},
+    {tableInfo: lastYear, description: 'one year prior'});
   writeLn(tableSummary);
 
+  writeLn('### Overall Performance score');
   if (lastMonth) {
     const perfScoreComparison = await getPerfScoreComparison(latestTable, lastMonth,
-        extractedDataset);
+        extractedDataset, 'month-over-month');
     writeLn(perfScoreComparison);
+  } else {
+    // something
+  }
+  if (lastYear) {
+    const perfScoreComparison = await getPerfScoreComparison(latestTable, lastYear,
+        extractedDataset, 'year-over-year');
+    writeLn(perfScoreComparison);
+  } else {
+    // something
   }
 
   // Close output stream.

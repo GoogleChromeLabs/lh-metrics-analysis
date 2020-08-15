@@ -136,6 +136,8 @@ async function getSingleTableSummary(tableInfo, dataset, description) {
   const chromeVersions = await getChromeVersionsSummary(tableInfo, dataset);
   const errorRate = await getErrorRateSummary(tableInfo, dataset, totalRows);
 
+  // TODO(bckenny): null perfScore summary line?
+
   return `**${monthName} ${year}** (${description}):
   - ${lhVersions.summary}
   - ${formatCompact(totalRows)} total Lighthouse runs
