@@ -110,14 +110,14 @@ async function run() {
 
   writeLn('### Overall Performance score');
   if (lastMonth) {
-    const perfScoreComparison = await getPerfScoreComparison(latestTable, lastMonth,
+    const perfScoreComparison = await getPerfScoreComparison(lastMonth, latestTable,
         extractedDataset, 'month-over-month');
     writeLn(perfScoreComparison);
   } else {
     // something
   }
   if (lastYear) {
-    const perfScoreComparison = await getPerfScoreComparison(latestTable, lastYear,
+    const perfScoreComparison = await getPerfScoreComparison(lastYear, latestTable,
         extractedDataset, 'year-over-year');
     writeLn(perfScoreComparison);
   } else {
