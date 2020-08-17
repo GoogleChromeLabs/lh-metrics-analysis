@@ -18,7 +18,7 @@ import {getTotalRows} from '../big-query/extract-from-ha-tables.js';
 import {fetchUniqueValueCounts} from '../big-query/fetch-from-extracted-tables.js';
 
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
-/** @typedef {import('../big-query/ha-tables-data.js').HaTableInfo} HaTableInfo */
+/** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
 
 /**
  * @param {Array<string|number>} arr
@@ -115,6 +115,28 @@ async function getErrorRateSummary(tableInfo, dataset, totalRows) {
 }
 
 /**
+ * TODO(bckenny): extend null perf scores back to pre 3.0.
+ * @param {HaTableInfo} tableInfo
+ * @param {Dataset} dataset
+ * @param {number} totalRows
+ * @return {Promise<{summary: string, warning?: string}>}
+ */
+async function getNullPerfSummary(tableInfo, dataset, totalRows) {
+  const perfScoreCounts = await fetchUniqueValueCounts(tableInfo, 'performance_score', dataset);
+  const nullPerfScoreCount = perfScoreCounts['null'];
+  const errorPercentage = (nullPerfScoreCount / totalRows)
+    .toLocaleString('en-US', {style: 'percent', maximumFractionDigits: 2});
+
+  const summary = `${errorPercentage} metric error rate ` +
+    `(${formatCompact(nullPerfScoreCount)} runs with a \`null\` Performance score)`;
+
+  // TODO(bckenny): warning when unusual level of errors. Hard code threshold?
+  return {
+    summary,
+  };
+}
+
+/**
  * Write a summary of the given table.
  * @param {HaTableInfo|null} tableInfo
  * @param {Dataset} dataset
@@ -135,13 +157,13 @@ async function getSingleTableSummary(tableInfo, dataset, description) {
   const lhVersions = await getLighthouseVersionsSummary(tableInfo, dataset);
   const chromeVersions = await getChromeVersionsSummary(tableInfo, dataset);
   const errorRate = await getErrorRateSummary(tableInfo, dataset, totalRows);
-
-  // TODO(bckenny): null perfScore summary line?
+  const nullPerfRate = await getNullPerfSummary(tableInfo, dataset, totalRows);
 
   return `**${monthName} ${year}** (${description}):
   - ${lhVersions.summary}
   - ${formatCompact(totalRows)} total Lighthouse runs
   - ${errorRate.summary}
+  - ${nullPerfRate.summary}
   - ${chromeVersions.summary}
 `;
 }

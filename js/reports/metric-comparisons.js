@@ -31,7 +31,7 @@ import {getShiftFunctionDeciles, getPrettyPrintedShiftData} from '../estimators/
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
-/** @typedef {import('../big-query/ha-tables-data.js').HaTableInfo} HaTableInfo */
+/** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
 
 const outfile = PROJECT_ROOT + '/report.md';
 const output = fs.createWriteStream(outfile);
