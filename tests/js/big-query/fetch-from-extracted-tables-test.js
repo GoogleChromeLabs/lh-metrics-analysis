@@ -38,7 +38,7 @@ import {extractMetricsFromHaLhrs} from '../../../js/big-query/extract-from-ha-ta
 import {PROJECT_ROOT} from '../../../js/module-utils.js';
 
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
-/** @typedef {import('../../../js/big-query/ha-tables-data.js').HaTableInfo} HaTableInfo */
+/** @typedef {import('../../../js/types/externs').HaTableInfo} HaTableInfo */
 
 // Source tables for test.
 const testSourceDataset = {

@@ -39,7 +39,7 @@ import expectedExtractedTables from './expected-extracted-tables.js';
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
 /** @typedef {import('@google-cloud/bigquery').Table} Table */
 /** @typedef {import('@google-cloud/bigquery').TableSchema} TableSchema */
-/** @typedef {import('../../../js/big-query/ha-tables-data.js').HaTableInfo} HaTableInfo */
+/** @typedef {import('../../../js/types/externs').HaTableInfo} HaTableInfo */
 
 // Source tables for test.
 const testSourceDataset = {

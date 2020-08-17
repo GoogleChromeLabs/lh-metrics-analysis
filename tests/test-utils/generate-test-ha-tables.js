@@ -34,7 +34,7 @@ import credentials from '../../js/big-query/auth/credentials.js';
 
 /** @typedef {import('@google-cloud/bigquery').Table} Table */
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
-/** @typedef {import('../../js/big-query/ha-tables-data.js').HaTableInfo} HaTableInfo */
+/** @typedef {import('../../js/types/externs').HaTableInfo} HaTableInfo */
 
 // TODO(bckenny): this could be generalized but maybe a single place is fine.
 const PROJECT_ID = 'lh-metrics-analysis';
