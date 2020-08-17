@@ -38,10 +38,10 @@ import {extractMetricsFromHaLhrs} from '../../../js/big-query/extract-from-ha-ta
 import {PROJECT_ROOT} from '../../../js/module-utils.js';
 
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
-/** @typedef {import('../../../js/big-query/ha-tables-data.js').HaTableInfo} HaTableInfo */
+/** @typedef {import('../../../js/types/externs').HaTableInfo} HaTableInfo */
 
 // Source tables for test.
-const sourceOptions = {
+const testSourceDataset = {
   haProjectId: 'lh-metrics-analysis',
   haDatasetId: 'test_lighthouse',
 };
@@ -64,7 +64,7 @@ async function assertEmptyDataset(dataset) {
 
 describe('Fetching from extracted metrics tables', () => {
   const bigQuery = new BigQuery(credentials);
-  const haTablesData = new HaTablesData(bigQuery);
+  const haTablesData = new HaTablesData(bigQuery, testSourceDataset);
 
   /** @type {HaTableInfo} */
   let may2020TableInfo;
@@ -206,14 +206,15 @@ describe('Fetching from extracted metrics tables', () => {
     });
 
     it('throws if not using custom source tables in a testing env (like this one)', async () => {
-      const tables = await haTablesData.getListOfTables();
+      const defaultHaTablesData = new HaTablesData(bigQuery);
+      const tables = await defaultHaTablesData.getListOfTables();
+
       await assert.rejects(async () => {
         return fetchSingleTableMetric(tables[0], 'lcp_value', testDataset);
       }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
 
-      const defaultishSourceOptions = {haProjectId: 'httparchive'};
       await assert.rejects(async () => {
-        return fetchSingleTableMetric(tables[0], 'lcp_value', testDataset, defaultishSourceOptions);
+        return fetchPairedTablesMetric(tables[0], tables[1], 'lcp_value', testDataset);
       }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
     });
 
@@ -230,8 +231,7 @@ describe('Fetching from extracted metrics tables', () => {
       });
 
       it('downloads a metric from a table', async () => {
-        savedFilename = await fetchSingleTableMetric(may2020TableInfo, metricValueId,
-            testDataset, sourceOptions);
+        savedFilename = await fetchSingleTableMetric(may2020TableInfo, metricValueId, testDataset);
 
         assert.ok(fs.existsSync(savedFilename));
         const fileContents = fs.readFileSync(savedFilename, 'utf8');
@@ -241,8 +241,7 @@ describe('Fetching from extracted metrics tables', () => {
       // Dependent on above test being run first.
       it('should use the same filename as #getSingleSaveFilename', async () => {
         // This should come from cache since it will have just been extracted by the above.
-        const extractedTable = await extractMetricsFromHaLhrs(may2020TableInfo, testDataset,
-            sourceOptions);
+        const extractedTable = await extractMetricsFromHaLhrs(may2020TableInfo, testDataset);
 
         // Get where it should have been saved.
         const [{etag}] = await extractedTable.getMetadata();
@@ -264,7 +263,7 @@ describe('Fetching from extracted metrics tables', () => {
         const {length: originalFileCount} = fs.readdirSync(path.dirname(savedFilename));
 
         // Fetch again.
-        await fetchSingleTableMetric(may2020TableInfo, metricValueId, testDataset, sourceOptions);
+        await fetchSingleTableMetric(may2020TableInfo, metricValueId, testDataset);
         assert.ok(fs.existsSync(savedFilename));
 
         // Contents are the same.
@@ -299,7 +298,7 @@ describe('Fetching from extracted metrics tables', () => {
       it('throws if pairing the same table with itself', async () => {
         await assert.rejects(async () => {
           return fetchPairedTablesMetric(aug2017TableInfo, aug2017TableInfo, metricValueId,
-              testDataset, sourceOptions);
+              testDataset);
         }, /^Error: Cannot fetch with same table as base and compare$/);
       });
 
@@ -311,7 +310,7 @@ describe('Fetching from extracted metrics tables', () => {
 
         // july2018TableInfo and aug2017TableInfo test tables have wikipedia in common.
         savedFilename = await fetchPairedTablesMetric(aug2017TableInfo, july2018TableInfo,
-            metricValueId, testDataset, sourceOptions);
+            metricValueId, testDataset);
 
         assert.ok(fs.existsSync(savedFilename));
         const fileContents = fs.readFileSync(savedFilename, 'utf8');
@@ -321,10 +320,9 @@ describe('Fetching from extracted metrics tables', () => {
       // Dependent on above test being run first.
       it('should use the same filename as #getPairedSaveFilename', async () => {
         // These should come from cache since they will have just been extracted by the above.
-        const extractedBaseTable = await extractMetricsFromHaLhrs(aug2017TableInfo, testDataset,
-            sourceOptions);
-        const extractedCompareTable = await extractMetricsFromHaLhrs(july2018TableInfo, testDataset,
-            sourceOptions);
+        const extractedBaseTable = await extractMetricsFromHaLhrs(aug2017TableInfo, testDataset);
+        const extractedCompareTable = await extractMetricsFromHaLhrs(july2018TableInfo,
+            testDataset);
 
         // Get where it should have been saved.
         const [{etag: baseEtag}] = await extractedBaseTable.getMetadata();
@@ -348,7 +346,7 @@ describe('Fetching from extracted metrics tables', () => {
 
         // Fetch again.
         const repeatSavedFilename = await fetchPairedTablesMetric(aug2017TableInfo,
-            july2018TableInfo, metricValueId, testDataset, sourceOptions);
+            july2018TableInfo, metricValueId, testDataset);
         assert.strictEqual(repeatSavedFilename, savedFilename);
         assert.ok(fs.existsSync(savedFilename));
 
@@ -368,14 +366,16 @@ describe('Fetching from extracted metrics tables', () => {
 
     describe('#fetchUniqueValueCounts', () => {
       it('throws if not using custom source tables in a testing env (like this one)', async () => {
+        const defaultHaTablesData = new HaTablesData(bigQuery);
+        const tables = await defaultHaTablesData.getListOfTables();
         await assert.rejects(async () => {
-          return fetchUniqueValueCounts(may2020TableInfo, 'lh_version', testDataset);
+          return fetchUniqueValueCounts(tables[0], 'lh_version', testDataset);
         }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
       });
 
       it('downloads the counts of unique values in a column', async () => {
         const lhVersionCounts = await fetchUniqueValueCounts(may2020TableInfo,
-            'lh_version', testDataset, sourceOptions);
+            'lh_version', testDataset);
 
         assert.deepStrictEqual(lhVersionCounts, {
           '5.6.0': 4,
@@ -385,7 +385,7 @@ describe('Fetching from extracted metrics tables', () => {
 
       it('includes a \'null\' key if a `null` value was found and counted', async () => {
         const lhVersionCounts = await fetchUniqueValueCounts(may2020TableInfo,
-          'runtime_error_code', testDataset, sourceOptions);
+          'runtime_error_code', testDataset);
 
         assert.deepStrictEqual(lhVersionCounts, {
           'CHROME_INTERSTITIAL_ERROR': 1,
@@ -402,19 +402,19 @@ describe('Fetching from extracted metrics tables', () => {
         const columnId = 'Robert\'); DROP TABLE Students; --';
 
         await assert.rejects(async () => {
-          return fetchUniqueValueCounts(may2020TableInfo, columnId, testDataset, sourceOptions);
+          return fetchUniqueValueCounts(may2020TableInfo, columnId, testDataset);
         // eslint-disable-next-line max-len
         }, /^Error: invalid characters in BigQuery column name \('Robert'\); DROP TABLE Students; --'\)$/);
       });
 
-      it('throws if fetching from an invalid extractedTableId', async () => {
+      it('throws if fetching from an invalid year', async () => {
         /** @type {HaTableInfo} */
-        const tableInfo = {...may2020TableInfo, extractedTableId: '$$$$'};
+        const tableInfo = {...may2020TableInfo, year: 2525};
 
         await assert.rejects(async () => {
-          return fetchUniqueValueCounts(tableInfo, 'chrome_version', testDataset, sourceOptions);
+          return fetchUniqueValueCounts(tableInfo, 'chrome_version', testDataset);
         // eslint-disable-next-line max-len
-        }, /^Error: invalid BigQuery id '\$\$\$\$'$/);
+        }, /^Error: Invalid HTTP Archive run year 2525$/);
       });
     });
   });

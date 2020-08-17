@@ -24,6 +24,7 @@ const {BigQuery} = BQModule;
 
 import HaTablesData from '../../../js/big-query/ha-tables-data.js';
 import credentials from '../../../js/big-query/auth/credentials.js';
+import expectedExtractedTables from './expected-extracted-tables.js';
 
 describe('HaTablesData', () => {
   const bigQuery = new BigQuery(credentials);
@@ -42,14 +43,53 @@ describe('HaTablesData', () => {
     const tables = await haTablesData.getListOfTables();
 
     for (const tableInfo of tables) {
-      const {year, month, tableId, extractedTableId} = tableInfo;
+      const {year, month, tableId, sourceDataset} = tableInfo;
 
       assert.ok(tableId.startsWith(`${year}`));
       assert.ok(tableId.endsWith(`${month}_01_mobile`));
 
-      assert.ok(extractedTableId.startsWith(`lh_extract_${year}`));
-      assert.ok(extractedTableId.endsWith(`${month}_01`));
+      assert.strictEqual(sourceDataset.haProjectId, 'httparchive');
+      assert.strictEqual(sourceDataset.haDatasetId, 'lighthouse');
     }
+  });
+
+  it('can load HTTP-Archive-like tables from a different source', async () => {
+    // Test tables sampled from the real HTTP Archive tables.
+    const alternateDataset = {
+      haProjectId: 'lh-metrics-analysis',
+      haDatasetId: 'test_lighthouse',
+    };
+
+    const sampleTablesData = new HaTablesData(bigQuery, alternateDataset);
+    const sampleTables = await sampleTablesData.getListOfTables();
+
+    for (const tableInfo of sampleTables) {
+      const {year, month, tableId, sourceDataset} = tableInfo;
+
+      // tableId, year, and month should all behave the same.
+      assert.ok(tableId.startsWith(`${year}`));
+      assert.ok(tableId.endsWith(`${month}_01_mobile`));
+
+      // but source IDs should be different.
+      assert.strictEqual(sourceDataset.haProjectId, alternateDataset.haProjectId);
+      assert.strictEqual(sourceDataset.haDatasetId, alternateDataset.haDatasetId);
+    }
+
+    // Should match the expectations used for the test tables.
+    const sampleTableIds = sampleTables.map(t => t.tableId).sort();
+    const expectedTableIds = Object.keys(expectedExtractedTables).sort();
+    assert.deepStrictEqual(sampleTableIds, expectedTableIds);
+  });
+
+  it('should throw if different source uses invalid IDs', () => {
+    const invalidDataset = {
+      haProjectId: 'lh-metrics-analysis',
+      haDatasetId: '&&&&&',
+    };
+
+    assert.throws(() => {
+      return new HaTablesData(bigQuery, invalidDataset);
+    }, /^Error: invalid BigQuery id '&&&&&'$/);
   });
 
   describe('#getListOfTables', () => {
@@ -76,6 +116,7 @@ describe('HaTablesData', () => {
       if (firstElement) tables.push(firstElement);
 
       const tablesAgain = await haTablesData.getListOfTables();
+      assert.notDeepStrictEqual(tables, originalTablesClone);
       assert.deepStrictEqual(tablesAgain, originalTablesClone);
     });
   });
@@ -120,12 +161,15 @@ describe('HaTablesData', () => {
         year: 2525,
         month: 1,
         tableId: '2525_01_01_mobile',
-        extractedTableId: 'lh_extract_2525_01_01',
+        sourceDataset: {
+          haProjectId: 'httparchive',
+          haDatasetId: 'lighthouse',
+        },
       };
 
       await assert.rejects(async () => {
         return haTablesData.getMonthBefore(fakeTable);
-      }, /^Error: lh_extract_2525_01_01/);
+      }, /^Error: 2525_01_01_mobile not in known tables/);
     });
   });
 
@@ -134,10 +178,9 @@ describe('HaTablesData', () => {
       const tables = await haTablesData.getListOfTables();
 
       const startYear = 2020;
-      let currentYearTable = tables.find(t => t.year === startYear && t.month === 5);
+      let currentYearTable = tables.find(t => t.year === startYear && t.month === 7);
 
-      // TODO(bckenny): once June 2020 data lands, can then go back 3 years.
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < 3; i++) {
         // Inside loop to keep tsc 3.9.3 happy.
         assert.ok(currentYearTable, `May ${startYear - i} table not found`);
 
@@ -163,12 +206,15 @@ describe('HaTablesData', () => {
         year: 2525,
         month: 1,
         tableId: '2525_01_01_mobile',
-        extractedTableId: 'lh_extract_2525_01_01',
+        sourceDataset: {
+          haProjectId: 'httparchive',
+          haDatasetId: 'lighthouse',
+        },
       };
 
       await assert.rejects(async () => {
         return haTablesData.getYearBefore(fakeTable);
-      }, /^Error: lh_extract_2525_01_01/);
+      }, /^Error: 2525_01_01_mobile not in known tables/);
     });
   });
 });

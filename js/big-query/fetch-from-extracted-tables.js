@@ -23,15 +23,18 @@ const {Storage} = CSModule;
 
 import {PROJECT_ROOT} from '../module-utils.js';
 import credentials from './auth/credentials.js';
-import {extractMetricsFromHaLhrs, assertValidYear, assertValidMonth} from
-  './extract-from-ha-tables.js';
+import {
+  extractMetricsFromHaLhrs,
+  assertValidYear,
+  assertValidMonth,
+  getExtractedTableId,
+} from './extract-from-ha-tables.js';
 import {assertValidBigQueryId, assertValidColumnName, getUuidTableSuffix} from './bq-utils.js';
 
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
 
-/** @typedef {import('./ha-tables-data.js').HaTableInfo} HaTableInfo */
+/** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
 /** @typedef {import('./extract-from-ha-tables.js').MetricValueId} MetricValueId */
-/** @typedef {import('./extract-from-ha-tables.js').SourceOptions} SourceOptions */
 
 // TODO(bckenny): bucket name will need to be settable to be generally usable.
 // TODO(bckenny): or could use alternate downoad method (e.g. `createQueryStream`).
@@ -124,7 +127,7 @@ function getPairedSaveFilename(metricValueId, baseTableInfo, baseEtag, compareTa
  */
 function getSingleTableMetricQuery(tableInfo, metricValueId) {
   assertValidColumnName(metricValueId);
-  const {extractedTableId} = tableInfo;
+  const extractedTableId = getExtractedTableId(tableInfo);
   assertValidBigQueryId(extractedTableId);
 
   return `SELECT
@@ -152,10 +155,10 @@ function getSingleTableMetricQuery(tableInfo, metricValueId) {
 function getPairedTablesMetricQuery(baseTableInfo, compareTableInfo, metricValueId) {
   assertValidColumnName(metricValueId);
 
-  const baseTableId = baseTableInfo.extractedTableId;
+  const baseTableId = getExtractedTableId(baseTableInfo);
   assertValidBigQueryId(baseTableId);
 
-  const compareTableId = compareTableInfo.extractedTableId;
+  const compareTableId = getExtractedTableId(compareTableInfo);
   assertValidBigQueryId(compareTableId);
 
   return `SELECT
@@ -193,6 +196,8 @@ async function getMetricQueryResults(metricQuery, intermediateDataset, metricVal
 
   const uuidSuffix = getUuidTableSuffix();
   const tmpId = `tmp_${metricValueId}_${uuidSuffix}`;
+
+  // TODO(bckenny): I don't think we need this. We could use the temporary table instead.
 
   // Temporary table to store query results before saving to cloud storage.
   const tmpTable = intermediateDataset.table(tmpId);
@@ -236,21 +241,18 @@ async function getMetricQueryResults(metricQuery, intermediateDataset, metricVal
  * `intermediateDataset` is the dataset used to cache tables of extracted LHRs.
  * Reuse `intermediateDataset` wherever possible as this is the expensive step.
  * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in `sourceOptions`.
+ * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} haTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
  * @param {Dataset} intermediateDataset
- * @param {Partial<SourceOptions>} [sourceOptions]
  * @return {Promise<string>}
  */
-async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDataset,
-    sourceOptions) {
+async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDataset) {
   console.warn(`Fetching '${metricValueId}' from extracted HTTP Archive run ` +
-      `${haTableInfo.extractedTableId}`);
+      `${getExtractedTableId(haTableInfo)}`);
 
   // Start by making sure target HTTP Archive run has been extracted to intermediate table.
-  const extractedTable = await extractMetricsFromHaLhrs(haTableInfo, intermediateDataset,
-    sourceOptions);
+  const extractedTable = await extractMetricsFromHaLhrs(haTableInfo, intermediateDataset);
   const [extractedMetadata] = await extractedTable.getMetadata();
   const extractedEtag = extractedMetadata.etag;
 
@@ -276,34 +278,33 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDa
 /**
  * Query the given metric from the base and compare HTTP Archive tables, joined
  * on both `requested_url` and `final_url`, and save locally as a two-column csv
- * file. Results may be smaller than against the two separate tables as both
- * must have a non-error result for a particular URL.
- * Caching relies on the order of base and compare for simplicity, so always use
- * the same order to avoid doing extra work.
+ * file. Results may be smaller than from each of the two separate tables as
+ * both are required to have a non-error result for a particular URL.
+ * Caching relies on the order of `base` and `compare` for simplicity, so always
+ * use the same order to avoid doing extra work.
  * `intermediateDataset` is the dataset used to cache tables of extracted LHRs.
  * Reuse `intermediateDataset` wherever possible as this is the expensive step.
  * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in `sourceOptions`.
+ * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
  * @param {Dataset} intermediateDataset
- * @param {Partial<SourceOptions>} [sourceOptions]
  * @return {Promise<string>}
  */
 async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricValueId,
-    intermediateDataset, sourceOptions) {
-  if (baseTableInfo.extractedTableId === compareTableInfo.extractedTableId) {
+    intermediateDataset) {
+  if (getExtractedTableId(baseTableInfo) === getExtractedTableId(compareTableInfo)) {
     throw new Error('Cannot fetch with same table as base and compare');
   }
 
   console.warn(`Fetching paired '${metricValueId}' from extracted HTTP Archive runs ` +
-      `${baseTableInfo.extractedTableId} and ${compareTableInfo.extractedTableId}`);
+      `${getExtractedTableId(baseTableInfo)} and ${getExtractedTableId(compareTableInfo)}`);
 
   // Start by making sure target HTTP Archive runs have been extracted to intermediate tables.
   const [baseTable, compareTable] = await Promise.all([
-    extractMetricsFromHaLhrs(baseTableInfo, intermediateDataset, sourceOptions),
-    extractMetricsFromHaLhrs(compareTableInfo, intermediateDataset, sourceOptions),
+    extractMetricsFromHaLhrs(baseTableInfo, intermediateDataset),
+    extractMetricsFromHaLhrs(compareTableInfo, intermediateDataset),
   ]);
   const [baseMetadata] = await baseTable.getMetadata();
   const baseEtag = baseMetadata.etag;
@@ -343,23 +344,23 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
  * `intermediateDataset` is the dataset used to cache tables of extracted LHRs.
  * Reuse `intermediateDataset` wherever possible as this is the expensive step.
  * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in `sourceOptions`.
+ * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} tableInfo
  * @param {'lh_version'|'runtime_error_code'|'chrome_version'} columnId
  * @param {Dataset} intermediateDataset
- * @param {Partial<SourceOptions>} [sourceOptions]
  * @return {Promise<Record<string, number>>}
  */
-async function fetchUniqueValueCounts(tableInfo, columnId, intermediateDataset, sourceOptions) {
+async function fetchUniqueValueCounts(tableInfo, columnId, intermediateDataset) {
   console.warn(`Fetching ${columnId} counts from extracted HTTP Archive run ` +
-      `${tableInfo.extractedTableId}`);
+      `${getExtractedTableId(tableInfo)}`);
 
+  // Fail early on invalid identifiers.
   assertValidColumnName(columnId);
-  const {extractedTableId} = tableInfo;
+  const extractedTableId = getExtractedTableId(tableInfo);
   assertValidBigQueryId(extractedTableId);
 
   // Start by making sure target HTTP Archive runs have been extracted to intermediate tables.
-  await extractMetricsFromHaLhrs(tableInfo, intermediateDataset, sourceOptions);
+  await extractMetricsFromHaLhrs(tableInfo, intermediateDataset);
 
   const countQuery = `SELECT
       ${columnId},
