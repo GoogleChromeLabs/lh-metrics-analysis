@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-import {getExtractedTableId} from './extract-from-ha-tables.js';
+import {assertValidProjectId, assertValidBigQueryId} from './bq-utils.js';
 
 /**
  * @fileoverview A class that lazily queries the available HTTPArchive
- * Lighthouse monthly tables.
+ * Lighthouse monthly tables and provides the info needed to query them.
  */
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
-/** @typedef {Readonly<{year: number, month: number, tableId: string, extractedTableId: string}>} HaTableInfo */
+/** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
 
-// TODO(bckenny): accept an optional SourceOptions to make finding tables in other datasets easier.
+const DEFAULT_HA_PROJECT_ID = 'httparchive';
+const DEFAULT_HA_DATASET_ID = 'lighthouse';
 
 export default class HaTablesData {
   /**
@@ -42,20 +43,40 @@ export default class HaTablesData {
   _bigQuery;
 
   /**
-   * @param {BigQuery} bigQuery
+   * @type {HaTableInfo['sourceDataset']}
+   * @private
    */
-  constructor(bigQuery) {
+  _sourceDataset;
+
+  /**
+   * A class that lazily queries the available HTTP Archive Lighthouse monthly
+   * tables.
+   * By default these are extracted from the official `httparchive.lighthouse.*`
+   * tables, but this can be overriden via `sourceDataset`.
+   * @param {BigQuery} bigQuery
+   * @param {HaTableInfo['sourceDataset']} [sourceDataset]
+   */
+  constructor(bigQuery, sourceDataset) {
     this._bigQuery = bigQuery;
+    this._sourceDataset = this._initAndCheckSourceDataset(sourceDataset);
   }
 
   /**
-   * Retrieve available HTTP Archive run tables, sorted chronologically starting
-   * with the most recent.
-   * @return {Promise<Array<HaTableInfo>>}
+   * Get the default HTTP Archive project and dataset IDs, unless overridden.
+   * Also asserts that the source IDs are valid so any typos can fail as early
+   * as possible.
+   * @param {Partial<HaTableInfo['sourceDataset']>} [options]
+   * @return {HaTableInfo['sourceDataset']}
+   * @private
    */
-  async getListOfTables() {
-    const tablesData = await this._getTablesData();
-    return tablesData.slice();
+  _initAndCheckSourceDataset(options = {}) {
+    const haProjectId = options.haProjectId ?? DEFAULT_HA_PROJECT_ID;
+    const haDatasetId = options.haDatasetId ?? DEFAULT_HA_DATASET_ID;
+
+    assertValidProjectId(haProjectId);
+    assertValidBigQueryId(haDatasetId);
+
+    return {haProjectId, haDatasetId};
   }
 
   /**
@@ -69,7 +90,7 @@ export default class HaTablesData {
       return this._tablesData;
     }
 
-    const tableIds = await getAvailableHaTableIds(this._bigQuery);
+    const tableIds = await getAvailableHaTableIds(this._bigQuery, this._sourceDataset);
 
     this._tablesData = tableIds
       // Put most recent first.
@@ -81,17 +102,30 @@ export default class HaTablesData {
 
         const year = Number.parseInt(result.groups.year);
         const month = Number.parseInt(result.groups.month);
-        const extractedTableId = getExtractedTableId({year, month});
+        const {haProjectId, haDatasetId} = this._sourceDataset;
 
         return {
           year,
           month,
           tableId,
-          extractedTableId,
+          sourceDataset: {
+            haProjectId,
+            haDatasetId,
+          },
         };
       });
 
     return this._tablesData;
+  }
+
+  /**
+   * Retrieve available HTTP Archive run tables, sorted chronologically starting
+   * with the most recent.
+   * @return {Promise<Array<HaTableInfo>>}
+   */
+  async getListOfTables() {
+    const tablesData = await this._getTablesData();
+    return tablesData.slice();
   }
 
   /**
@@ -113,7 +147,7 @@ export default class HaTablesData {
   async getMonthBefore(tableInfo) {
     const tablesData = await this._getTablesData();
     if (!tablesData.includes(tableInfo)) {
-      throw new Error(`${tableInfo.extractedTableId} not in known tables. Where did you get that?`);
+      throw new Error(`${tableInfo.tableId} not in known tables. Where did you get that?`);
     }
 
     let {month: earlierMonth, year: earlierYear} = tableInfo;
@@ -138,7 +172,7 @@ export default class HaTablesData {
   async getYearBefore(tableInfo) {
     const tablesData = await this._getTablesData();
     if (!tablesData.includes(tableInfo)) {
-      throw new Error(`${tableInfo.extractedTableId} not in known tables. Where did you get that?`);
+      throw new Error(`${tableInfo.tableId} not in known tables. Where did you get that?`);
     }
 
     let {month: earlierMonth, year: earlierYear} = tableInfo;
@@ -155,11 +189,15 @@ export default class HaTablesData {
  * Currently does not return the old half-month tables (e.g. only
  * returns `2018_02_01_mobile`, not `2018_02_15_mobile`).
  * @param {BigQuery} bigQuery
+ * @param {HaTableInfo['sourceDataset']} source
  * @return {Promise<Array<string>>}
  */
-async function getAvailableHaTableIds(bigQuery) {
+async function getAvailableHaTableIds(bigQuery, {haProjectId, haDatasetId}) {
+  assertValidProjectId(haProjectId);
+  assertValidBigQueryId(haDatasetId);
+
   const tableQuery = `SELECT table_id
-    FROM \`httparchive.lighthouse.__TABLES__\`
+    FROM \`${haProjectId}.${haDatasetId}.__TABLES__\`
     WHERE ENDS_WITH(table_id, 'mobile')`;
 
   const [tables] = await bigQuery.query({
