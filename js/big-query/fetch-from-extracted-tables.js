@@ -184,36 +184,38 @@ function getPairedTablesMetricQuery(baseTableInfo, compareTableInfo, metricValue
 }
 
 /**
- * Download a CSV result for the given query. Uses a temporary table in the
- * provided dataset for saving the results, which is deleted afterwards.
+ * Download a CSV result for the given query. Uses a temporary storage file in
+ * the provided bucket for saving the results, which is deleted afterwards.
  * @param {string} metricQuery
- * @param {Dataset} intermediateDataset
+ * @param {Dataset} extractedDataset
  * @param {MetricValueId|'performance_score'} metricValueId For logging and easy table/file identification.
  * @return {Promise<Buffer>}
  */
-async function getMetricQueryResults(metricQuery, intermediateDataset, metricValueId) {
+async function getMetricQueryResults(metricQuery, extractedDataset, metricValueId) {
   console.warn('  Running query...');
 
-  const uuidSuffix = getUuidTableSuffix();
-  const tmpId = `tmp_${metricValueId}_${uuidSuffix}`;
-
-  // TODO(bckenny): I don't think we need this. We could use the temporary table instead.
-
-  // Temporary table to store query results before saving to cloud storage.
-  const tmpTable = intermediateDataset.table(tmpId);
-  await tmpTable.create();
-
-  // Temporary cloud file to store tmpTable contents before saving to local disk.
-  const tmpFile = tmpBucket.file(`${tmpId}.csv`);
+  // Temporary cloud file to store query contents before saving to local disk.
+  const uuidSuffix = getUuidTableSuffix(); // TODO(bckenny): more of a file suffix now.
+  const tmpFile = tmpBucket.file(`tmp_${metricValueId}_${uuidSuffix}.csv`);
 
   try {
-    const [tmpMetricJob] = await intermediateDataset.createQueryJob({
+    // Results are written to a temporary table created by BigQuery.
+    const [tmpMetricJob] = await extractedDataset.createQueryJob({
       query: metricQuery,
-      // Write to tmpTable only if it doesn't already exist.
-      destination: tmpTable,
-      writeDisposition: 'WRITE_EMPTY',
     });
     await tmpMetricJob.promise();
+
+    // Get a reference to the temporary table.
+    const [tmpJobMetadata] = await tmpMetricJob.getMetadata();
+    const destinationInfo = tmpJobMetadata.configuration.query.destinationTable;
+    const tmpTable = extractedDataset.bigQuery
+      .dataset(destinationInfo.datasetId)
+      .table(destinationInfo.tableId);
+
+    const [tmpTableExists] = await tmpTable.exists();
+    if (!tmpTableExists) {
+      throw new Error(`temporary table not found at ${JSON.stringify(destinationInfo)}`);
+    }
 
     const [metadata] = await tmpTable.getMetadata();
     const numRows = Number.parseInt(metadata.numRows).toLocaleString();
@@ -228,9 +230,8 @@ async function getMetricQueryResults(metricQuery, intermediateDataset, metricVal
 
     return contents;
   } finally {
-    // Clean up tmp resources regardless of outcome.
-    console.warn('  Cleaning up BQ and storage temp space...');
-    await tmpTable.delete();
+    // Clean up tmp file regardless of outcome.
+    console.warn('  Cleaning up storage temp file...');
     await tmpFile.delete();
   }
 }
@@ -238,21 +239,22 @@ async function getMetricQueryResults(metricQuery, intermediateDataset, metricVal
 /**
  * Query a metric from the given HTTP Archive table and save locally as a
  * single-column csv file.
- * `intermediateDataset` is the dataset used to cache tables of extracted LHRs.
- * Reuse `intermediateDataset` wherever possible as this is the expensive step.
+ * `extractedDataset` is the dataset used for tables of values extracted from
+ * the HTTP Archive LHRs. Reuse `extractedDataset` wherever possible as this is
+ * the expensive step.
  * By default these are extracted from the official `httparchive.lighthouse.*`
  * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} haTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
- * @param {Dataset} intermediateDataset
+ * @param {Dataset} extractedDataset
  * @return {Promise<string>}
  */
-async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDataset) {
+async function fetchSingleTableMetric(haTableInfo, metricValueId, extractedDataset) {
   console.warn(`Fetching '${metricValueId}' from extracted HTTP Archive run ` +
       `${getExtractedTableId(haTableInfo)}`);
 
-  // Start by making sure target HTTP Archive run has been extracted to intermediate table.
-  const extractedTable = await extractMetricsFromHaLhrs(haTableInfo, intermediateDataset);
+  // Start by making sure target HTTP Archive run has been extracted.
+  const extractedTable = await extractMetricsFromHaLhrs(haTableInfo, extractedDataset);
   const [extractedMetadata] = await extractedTable.getMetadata();
   const extractedEtag = extractedMetadata.etag;
 
@@ -266,7 +268,7 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDa
 
   // If not, download a single column of metric data.
   const metricQuery = getSingleTableMetricQuery(haTableInfo, metricValueId);
-  const metricCsv = await getMetricQueryResults(metricQuery, intermediateDataset, metricValueId);
+  const metricCsv = await getMetricQueryResults(metricQuery, extractedDataset, metricValueId);
 
   // And save to disk.
   await fs.promises.mkdir(path.dirname(filename), {recursive: true});
@@ -282,18 +284,19 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, intermediateDa
  * both are required to have a non-error result for a particular URL.
  * Caching relies on the order of `base` and `compare` for simplicity, so always
  * use the same order to avoid doing extra work.
- * `intermediateDataset` is the dataset used to cache tables of extracted LHRs.
- * Reuse `intermediateDataset` wherever possible as this is the expensive step.
+ * `extractedDataset` is the dataset used for tables of values extracted from
+ * the HTTP Archive LHRs. Reuse `extractedDataset` wherever possible as this is
+ * the expensive step.
  * By default these are extracted from the official `httparchive.lighthouse.*`
  * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
- * @param {Dataset} intermediateDataset
+ * @param {Dataset} extractedDataset
  * @return {Promise<string>}
  */
 async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricValueId,
-    intermediateDataset) {
+    extractedDataset) {
   if (getExtractedTableId(baseTableInfo) === getExtractedTableId(compareTableInfo)) {
     throw new Error('Cannot fetch with same table as base and compare');
   }
@@ -301,10 +304,10 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
   console.warn(`Fetching paired '${metricValueId}' from extracted HTTP Archive runs ` +
       `${getExtractedTableId(baseTableInfo)} and ${getExtractedTableId(compareTableInfo)}`);
 
-  // Start by making sure target HTTP Archive runs have been extracted to intermediate tables.
+  // Start by making sure target HTTP Archive runs have been extracted.
   const [baseTable, compareTable] = await Promise.all([
-    extractMetricsFromHaLhrs(baseTableInfo, intermediateDataset),
-    extractMetricsFromHaLhrs(compareTableInfo, intermediateDataset),
+    extractMetricsFromHaLhrs(baseTableInfo, extractedDataset),
+    extractMetricsFromHaLhrs(compareTableInfo, extractedDataset),
   ]);
   const [baseMetadata] = await baseTable.getMetadata();
   const baseEtag = baseMetadata.etag;
@@ -322,7 +325,7 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
 
   // If not, download the metric data.
   const pairedQuery = getPairedTablesMetricQuery(baseTableInfo, compareTableInfo, metricValueId);
-  const pairedMetricCsv = await getMetricQueryResults(pairedQuery, intermediateDataset,
+  const pairedMetricCsv = await getMetricQueryResults(pairedQuery, extractedDataset,
       metricValueId);
 
   // TODO(bckenny): do a zero-row result check cause something went wrong.
@@ -341,16 +344,17 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
  * limited to columns with a limited number of possibilities.
  * If one of the values is `null`, the returned object will have a property with
  * a key of (the stringified) `'null'` for the count of the null values.
- * `intermediateDataset` is the dataset used to cache tables of extracted LHRs.
- * Reuse `intermediateDataset` wherever possible as this is the expensive step.
+ * `extractedDataset` is the dataset used for tables of values extracted from
+ * the HTTP Archive LHRs. Reuse `extractedDataset` wherever possible as this is
+ * the expensive step.
  * By default these are extracted from the official `httparchive.lighthouse.*`
  * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} tableInfo
  * @param {'lh_version'|'runtime_error_code'|'chrome_version'} columnId
- * @param {Dataset} intermediateDataset
+ * @param {Dataset} extractedDataset
  * @return {Promise<Record<string, number>>}
  */
-async function fetchUniqueValueCounts(tableInfo, columnId, intermediateDataset) {
+async function fetchUniqueValueCounts(tableInfo, columnId, extractedDataset) {
   console.warn(`Fetching ${columnId} counts from extracted HTTP Archive run ` +
       `${getExtractedTableId(tableInfo)}`);
 
@@ -359,8 +363,8 @@ async function fetchUniqueValueCounts(tableInfo, columnId, intermediateDataset) 
   const extractedTableId = getExtractedTableId(tableInfo);
   assertValidBigQueryId(extractedTableId);
 
-  // Start by making sure target HTTP Archive runs have been extracted to intermediate tables.
-  await extractMetricsFromHaLhrs(tableInfo, intermediateDataset);
+  // Start by making sure target HTTP Archive runs have been extracted.
+  await extractMetricsFromHaLhrs(tableInfo, extractedDataset);
 
   const countQuery = `SELECT
       ${columnId},
@@ -372,7 +376,7 @@ async function fetchUniqueValueCounts(tableInfo, columnId, intermediateDataset) 
     ORDER BY
       ${columnId}`;
 
-  const [rows] = await intermediateDataset.query({
+  const [rows] = await extractedDataset.query({
     query: countQuery,
   });
 
