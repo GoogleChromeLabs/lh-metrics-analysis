@@ -70,7 +70,7 @@ loadFile <- function(filename) {
 #' @return A data frame with numeric columns `base` and `compare` of length `min(nrow(data), sample_size)`.
 sampleDataIfNeeded <- function(data, sample_size = Inf) {
   # Set the rand seed so results are reproducible.
-    set.seed(7)
+  set.seed(7)
 
   # Sample data if requested, keeping pairs together.
   if (is.finite(sample_size) && sample_size < length(data$base)) {
@@ -96,7 +96,7 @@ run <- function() {
   doc <- "Run shift function to find the deciles of differences between the two columns of the input
           file. Output written as csv to stdout.
   Usage:
-      rogme_shift_function_bin.R <input> [options]
+      rogme-shift-function-bin.R <input> [options]
       
   Options:
       -h, --help  Show this screen.
