@@ -38,7 +38,7 @@ plotStackedDecileBars <- function(p,
     rep(q_size, floor(qn / 2))
   )
 
-  for (d in 1:qn){
+  for (d in 1:qn) {
     # Group 1 (on top).
     p <- p + ggplot2::annotate(
       "segment",
@@ -66,7 +66,7 @@ plotStackedDecileBars <- function(p,
 
   # Add labels for p10, p50, p90 deciles above top group.
   if (add_lab) {
-    for (d in c(1, ceiling(qn / 2), qn)){
+    for (d in c(1, ceiling(qn / 2), qn)) {
       p <- p + ggplot2::annotate(
         "label",
         x = 2 + q_width / 2,
@@ -112,7 +112,7 @@ plotDecileBars <- function(p,
     rep(q_size, floor(qn / 2))
   )
 
-  for (d in 1:qn){
+  for (d in 1:qn) {
     # group 1 (on top)
     p <- p + ggplot2::annotate("segment",
       x = 1 - q_width / 2,
@@ -126,8 +126,8 @@ plotDecileBars <- function(p,
   }
 
   # add labels for p10, p50, p90 deciles above top group.
-  if (add_lab){
-    for (d in c(1, ceiling(qn/2), qn)){
+  if (add_lab) {
+    for (d in c(1, ceiling(qn / 2), qn)) {
       p <- p + ggplot2::annotate("label",
         x = 1 + q_width / 2,
         y = deciles[d],
@@ -238,7 +238,7 @@ plotDecileLinks <- function(p,
   )
 
   # add links ---------------------------------------------------
-  for (d in 1:qn){
+  for (d in 1:qn) {
     p <- p + ggplot2::annotate(
       "segment",
       # Start at top (group 1).
@@ -249,16 +249,17 @@ plotDecileLinks <- function(p,
       yend = g2[d],
       colour = link_col[diff_sign[d]],
       alpha = alpha_seq[deco[d]],
-      size = line_size[d])
+      size = line_size[d]
+    )
   }
 
   # Add rectangle.
   if (add_rect == TRUE) {
-    if (is.null(rect_alpha)){
+    if (is.null(rect_alpha)) {
       rect_alpha <- 0.2
     }
     # TODO(bckenny): rect_col is unused
-    if (is.null(rect_col)){
+    if (is.null(rect_col)) {
       rect_col <- "grey30"
     }
     p <- p + ggplot2::annotate(
@@ -272,17 +273,17 @@ plotDecileLinks <- function(p,
   }
 
   # Add labels for differences between extreme deciles and median.
-  if (add_lab == TRUE){
-    for (d in c(1, ceiling(qn / 2), qn)){
+  if (add_lab == TRUE) {
+    for (d in c(1, ceiling(qn / 2), qn)) {
       # Round value first to not get ±0 on a label.
       label_value <- round(diff[d] * label_multiplier, labres)
       # Add explicit sign for display.
-      if (label_value < 0){
-        label_sign = "-"
+      if (label_value < 0) {
+        label_sign <- "-"
       } else if (label_value > 0) {
-        label_sign = "+"
+        label_sign <- "+"
       } else {
-        label_sign = ""
+        label_sign <- ""
       }
 
       p <- p + ggplot2::annotate(
@@ -293,7 +294,8 @@ plotDecileLinks <- function(p,
         fill = link_col[diff_sign[d]],
         colour = "white",
         fontface = "bold",
-        alpha = alpha_seq[deco[d]])
+        alpha = alpha_seq[deco[d]]
+      )
     }
   }
   return(p)
@@ -327,37 +329,37 @@ addSfLabels <- function(p,
                         text_size = 5,
                         label_unit = "") {
   # check p and sf have same length
-  if(length(p)!=length(sf)){
+  if (length(p) != length(sf)) {
     stop("p and sf must have the same length")
   }
   # check p input is a list
-  if(!is.list(p)){
+  if (!is.list(p)) {
     stop("p must be a list")
   }
   # check sf input is a list of data frames
-  if(!is.list(sf)){
+  if (!is.list(sf)) {
     stop("sf must be a list")
   }
   for (pc in 1:length(sf)) {
-    if(!is.data.frame(sf[[pc]])){
+    if (!is.data.frame(sf[[pc]])) {
       stop("input sf list must contain data.frames")
     }
   }
   plist <- vector("list", length(p)) # declare list of plot objects
   for (pc in 1:length(sf)) {
     # extract vectors from shift function -------------------------
-    if(names(sf[[pc]][1]) == "q"){ # pbci shift function
+    if (names(sf[[pc]][1]) == "q") { # pbci shift function
       dec <- sf[[pc]][[1]]
       g1 <- sf[[pc]][[2]] # group 1 quantiles
       g2 <- sf[[pc]][[3]] # group 2 quantiles
       nq <- length(g1)
-      deco <- c(seq(1,floor(nq/2)+1),seq(floor(nq/2),1)) # code of deciles
-      alpha_seq <- seq(link_alpha[1], link_alpha[2], length.out = floor(nq/2)+1)
+      deco <- c(seq(1, floor(nq / 2) + 1), seq(floor(nq / 2), 1)) # code of deciles
+      alpha_seq <- seq(link_alpha[1], link_alpha[2], length.out = floor(nq / 2) + 1)
     } else { # pbse shift function
-      dec <- seq(1,9,1)/10
+      dec <- seq(1, 9, 1) / 10
       g1 <- sf[[pc]][[1]] # group 1 deciles
       g2 <- sf[[pc]][[2]] # group 2 deciles
-      deco <- c(seq(1,5),seq(4,1)) # code of deciles
+      deco <- c(seq(1, 5), seq(4, 1)) # code of deciles
       alpha_seq <- seq(link_alpha[1], link_alpha[2], length.out = 5)
     }
     diff <- sf[[pc]]$difference # differences
@@ -369,12 +371,12 @@ addSfLabels <- function(p,
 
     # add labels for alternating deciles
     for (d in seq(1, length(dec), by = 2)) {
-      if (diff[d] < 0){ # negative difference
+      if (diff[d] < 0) { # negative difference
         y <- hi[d]
-        vjust = 0 - y_lab_nudge
+        vjust <- 0 - y_lab_nudge
       } else { # positive difference
         y <- lo[d]
-        vjust = 1 + y_lab_nudge
+        vjust <- 1 + y_lab_nudge
       }
       p[[pc]] <- p[[pc]] + ggplot2::annotate("label",
         x = g1[d],
@@ -385,7 +387,8 @@ addSfLabels <- function(p,
         colour = "white",
         fontface = "bold",
         alpha = alpha_seq[deco[d]],
-        size = text_size)
+        size = text_size
+      )
     } # quantile loop
   } # loop for list of ggplot objects
   return(p)

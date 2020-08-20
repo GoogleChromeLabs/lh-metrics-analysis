@@ -94,23 +94,23 @@ sampleDataIfNeeded <- function(data, sample_size = Inf) {
 #' @param filename The path to the CSV file.
 #' @return A data frame with the expected shiftdhd results.
 shiftdhd <- function(filename) {
-  sf_str = system2(
-    'node',
-    args = c('js/estimators/shift-function.js', '-i', filename),
+  sf_str <- system2(
+    "node",
+    args = c("js/estimators/shift-function.js", "-i", filename),
     stdout = TRUE,
   )
   sf <- utils::read.csv(text = sf_str, header = TRUE, sep = ",")
-  
+
   # Fix js-style names
-  names(sf)[names(sf) == 'ciLower'] <- 'ci_lower'
-  names(sf)[names(sf) == 'ciUpper'] <- 'ci_upper'
+  names(sf)[names(sf) == "ciLower"] <- "ci_lower"
+  names(sf)[names(sf) == "ciUpper"] <- "ci_upper"
 
   return(sf)
 }
 
 #' Plots scatterplots of the two supplied distributions, stacked vertically.
 #' `base` will appear at the top of the plot.
-#' 
+#'
 #' @param base Numeric vector for first distribution.
 #' @param compare Numeric vector for second distribution.
 #' @param data_labels The axis labels for the two distributions, in order.
@@ -135,15 +135,15 @@ plotStackedScatterplots <- function(base,
   data <- tidyr::pivot_longer(df, c("base", "compare"), names_to = "group")
 
   p <- ggplot2::ggplot(
-      data,
-      ggplot2::aes_string(
-        x = "group",
-        y = "value",
-        fill = "group",
-        colour = "group",
-        shape = "group"
-      )
-    ) +
+    data,
+    ggplot2::aes_string(
+      x = "group",
+      y = "value",
+      fill = "group",
+      colour = "group",
+      shape = "group"
+    )
+  ) +
     ggbeeswarm::geom_quasirandom(
       # TODO(bckenny): iterate on look
       # method = "tukeyDense",
@@ -155,8 +155,8 @@ plotStackedScatterplots <- function(base,
     ggplot2::theme_bw() +
     ggplot2::theme(legend.position = "none") +
     ggplot2::theme(
-      axis.title.x = ggplot2::element_text(size = 16,face = "bold"),
-      axis.title.y = ggplot2::element_text(size = 16,face = "bold"),
+      axis.title.x = ggplot2::element_text(size = 16, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 16, face = "bold"),
       axis.text.x = ggplot2::element_text(size = 14, hjust = 1),
       axis.text.y = ggplot2::element_text(size = 14)
     ) +
@@ -196,7 +196,7 @@ plotStackedScatterplots <- function(base,
 #' Plots scatterplots of the two supplied distributions, stacked vertically,
 #' with deciles connected between them. `base` will appear at the top of the
 #' plot.
-#' 
+#'
 #' @param base Numeric vector for first distribution.
 #' @param compare Numeric vector for first distribution.
 #' @param data_labels The axis labels for the two distributions, in order.
@@ -283,7 +283,7 @@ run <- function() {
 
   sf <- shiftdhd(arguments$input)
 
-  unit <- if (is.null(arguments$unit)) '' else arguments$unit
+  unit <- if (is.null(arguments$unit)) "" else arguments$unit
   unit_suffix <- ""
   if (nchar(unit)) {
     unit_suffix <- paste0(" (", unit, ")")
