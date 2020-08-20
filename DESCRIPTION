@@ -15,7 +15,9 @@ Imports:
     ggplot2,
     docopt,
     rogme (>= 0.2.1),
-    utils
+    utils,
+    tidyr (>= 1.0.0),
+    tibble (>= 3.0.0)
 Suggests: 
     testthat (>= 2.3)
 Remotes: 
