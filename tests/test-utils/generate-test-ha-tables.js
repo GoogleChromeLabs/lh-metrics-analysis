@@ -33,11 +33,10 @@ import HaTablesData from '../../js/big-query/ha-tables-data.js';
 import credentials from '../../js/big-query/auth/credentials.js';
 
 /** @typedef {import('@google-cloud/bigquery').Table} Table */
-/** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
+/** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
 /** @typedef {import('../../js/types/externs').HaTableInfo} HaTableInfo */
 
-// TODO(bckenny): this could be generalized but maybe a single place is fine.
-const PROJECT_ID = 'lh-metrics-analysis';
+// Tables mirror `httparchive.lighthouse` but in the test dataset.
 const TEST_DATASET_ID = 'test_lighthouse';
 
 /**
@@ -119,18 +118,17 @@ function getSamplingQuery(haTableInfo) {
 
 /**
  * Sample the given table's LHRs and save them to a table for testing.
- * @param {BigQuery} bigQuery
+ * @param {Dataset} testDataset
  * @param {HaTableInfo} haTableInfo
  * @return {Promise<Table>}
  */
-async function createTestTable(bigQuery, haTableInfo) {
+async function createTestTable(testDataset, haTableInfo) {
   // Table id is the same HTTP Archive id but in the test dataset.
-  const testDataset = bigQuery.dataset(TEST_DATASET_ID);
   const testTable = testDataset.table(haTableInfo.tableId);
 
   console.warn(`Sampling LHRs from ${haTableInfo.tableId} and saving to test table...`);
   const samplingQuery = getSamplingQuery(haTableInfo);
-  const [samplingJob] = await bigQuery.createQueryJob({
+  const [samplingJob] = await testDataset.bigQuery.createQueryJob({
     query: samplingQuery,
 
     // Write to testTable only if it doesn't already exist.
@@ -144,11 +142,10 @@ async function createTestTable(bigQuery, haTableInfo) {
 }
 
 /**
- * @param {BigQuery} bigQuery
  * @param {Table} testTable
  * @return {Promise<void>}
  */
-async function printTestTableInfo(bigQuery, testTable) {
+async function printTestTableInfo(testTable) {
   const [{numRows}] = await testTable.getMetadata();
 
   const tableId = testTable.id;
@@ -162,29 +159,29 @@ async function printTestTableInfo(bigQuery, testTable) {
 }
 
 /**
- * @param {BigQuery} bigQuery
+ * @param {Dataset} testDataset
  * @return {Promise<Array<string>>}
  */
-async function getExistingTestTableIds(bigQuery) {
+async function getExistingTestTableIds(testDataset) {
   const query = `SELECT table_id
-    FROM \`${PROJECT_ID}.${TEST_DATASET_ID}.__TABLES__\`
+    FROM \`${TEST_DATASET_ID}.__TABLES__\`
     WHERE ENDS_WITH(table_id, 'mobile')`;
 
-  const [tables] = await bigQuery.query({query});
+  const [tables] = await testDataset.query({query});
   return tables.map(t => t.table_id);
 }
 
 /**
- * @param {BigQuery} bigQuery
+ * @param {Dataset} testDataset
  * @return {Promise<HaTableInfo>}
  */
-async function selectHaTable(bigQuery) {
-  const haTablesData = new HaTablesData(bigQuery);
+async function selectHaTable(testDataset) {
+  const haTablesData = new HaTablesData(testDataset);
   console.warn('  Fetching available HTTP Archive tables...');
   const availableTableList = await haTablesData.getListOfTables();
 
   console.warn('  Fetching existing test tables...');
-  const existingTableList = await getExistingTestTableIds(bigQuery);
+  const existingTableList = await getExistingTestTableIds(testDataset);
 
   // Return all available tables with existing ones disabled to give context.
   const choices = availableTableList.map(tableInfo => {
@@ -210,11 +207,12 @@ async function selectHaTable(bigQuery) {
 
 async function run() {
   const bigQuery = new BigQuery(credentials);
+  const testDataset = bigQuery.dataset(TEST_DATASET_ID);
 
-  const selectedHaTable = await selectHaTable(bigQuery);
-  const testTable = await createTestTable(bigQuery, selectedHaTable);
+  const selectedHaTable = await selectHaTable(testDataset);
+  const testTable = await createTestTable(testDataset, selectedHaTable);
 
-  await printTestTableInfo(bigQuery, testTable);
+  await printTestTableInfo(testTable);
 }
 
 // until we have `--unhandled-rejections=strict` by default.
