@@ -22,13 +22,21 @@ import {strict as assert} from 'assert';
 import BQModule from '@google-cloud/bigquery';
 const {BigQuery} = BQModule;
 
-import HaTablesData from '../../../js/big-query/ha-tables-data.js';
+import HaTablesData, {
+  assertValidMonth,
+  assertValidYear,
+  getExtractedTableId,
+} from '../../../js/big-query/ha-tables-data.js';
 import credentials from '../../../js/big-query/auth/credentials.js';
 import expectedExtractedTables from './expected-extracted-tables.js';
 
+// Destination dataset for test.
+const extractedDatasetId = 'test_lh_extract';
+
 describe('HaTablesData', () => {
   const bigQuery = new BigQuery(credentials);
-  const haTablesData = new HaTablesData(bigQuery);
+  const extractedDataset = bigQuery.dataset(extractedDatasetId);
+  const haTablesData = new HaTablesData(extractedDataset);
 
   it('fetches the available tables', async function() {
     // First request to BQ can take a while, so give it a bit.
@@ -55,12 +63,12 @@ describe('HaTablesData', () => {
 
   it('can load HTTP-Archive-like tables from a different source', async () => {
     // Test tables sampled from the real HTTP Archive tables.
-    const alternateDataset = {
+    const alternateSource = {
       haProjectId: 'lh-metrics-analysis',
       haDatasetId: 'test_lighthouse',
     };
 
-    const sampleTablesData = new HaTablesData(bigQuery, alternateDataset);
+    const sampleTablesData = new HaTablesData(extractedDataset, alternateSource);
     const sampleTables = await sampleTablesData.getListOfTables();
 
     for (const tableInfo of sampleTables) {
@@ -71,8 +79,8 @@ describe('HaTablesData', () => {
       assert.ok(tableId.endsWith(`${month}_01_mobile`));
 
       // but source IDs should be different.
-      assert.strictEqual(sourceDataset.haProjectId, alternateDataset.haProjectId);
-      assert.strictEqual(sourceDataset.haDatasetId, alternateDataset.haDatasetId);
+      assert.strictEqual(sourceDataset.haProjectId, alternateSource.haProjectId);
+      assert.strictEqual(sourceDataset.haDatasetId, alternateSource.haDatasetId);
     }
 
     // Should match the expectations used for the test tables.
@@ -88,7 +96,7 @@ describe('HaTablesData', () => {
     };
 
     assert.throws(() => {
-      return new HaTablesData(bigQuery, invalidDataset);
+      return new HaTablesData(extractedDataset, invalidDataset);
     }, /^Error: invalid BigQuery id '&&&&&'$/);
   });
 
@@ -109,15 +117,15 @@ describe('HaTablesData', () => {
     it('returns a copy of the list so will not be mutated', async () => {
       const tables = await haTablesData.getListOfTables();
 
-      const originalTablesClone = JSON.parse(JSON.stringify(tables));
+      const originalTablesCopy = [...tables];
 
       tables.pop();
       const firstElement = tables.shift();
       if (firstElement) tables.push(firstElement);
 
       const tablesAgain = await haTablesData.getListOfTables();
-      assert.notDeepStrictEqual(tables, originalTablesClone);
-      assert.deepStrictEqual(tablesAgain, originalTablesClone);
+      assert.notDeepStrictEqual(tables, originalTablesCopy);
+      assert.deepStrictEqual(tablesAgain, originalTablesCopy);
     });
   });
 
@@ -165,6 +173,7 @@ describe('HaTablesData', () => {
           haProjectId: 'httparchive',
           haDatasetId: 'lighthouse',
         },
+        extractedDataset,
       };
 
       await assert.rejects(async () => {
@@ -181,7 +190,7 @@ describe('HaTablesData', () => {
       let currentYearTable = tables.find(t => t.year === startYear && t.month === 7);
 
       for (let i = 0; i < 3; i++) {
-        // Inside loop to keep tsc 3.9.3 happy.
+        // Assertion inside loop to keep tsc 3.9.3 happy.
         assert.ok(currentYearTable, `May ${startYear - i} table not found`);
 
         const previousYearTable = await haTablesData.getYearBefore(currentYearTable);
@@ -210,11 +219,136 @@ describe('HaTablesData', () => {
           haProjectId: 'httparchive',
           haDatasetId: 'lighthouse',
         },
+        extractedDataset,
       };
 
       await assert.rejects(async () => {
         return haTablesData.getYearBefore(fakeTable);
       }, /^Error: 2525_01_01_mobile not in known tables/);
+    });
+  });
+
+  describe('HaTablesData.addExtractedTable', () => {
+    // Create a new HaTablesData instance so we don't interfere with other tests.
+    const tmpHaTablesData = new HaTablesData(extractedDataset);
+
+    it('can add an extracted table to a tableInfo', async function() {
+      this.timeout(10000); // eslint-disable-line no-invalid-this
+      const [tableInfo] = await tmpHaTablesData.getListOfTables();
+
+      // Actual BQ table is never created, this is just a local object.
+      const extractedId = getExtractedTableId(tableInfo);
+      const tmpExtractedTable = extractedDataset.table(extractedId);
+
+      HaTablesData.addExtractedTable(tableInfo, tmpExtractedTable);
+      assert.strictEqual(tableInfo.extractedTable, tmpExtractedTable);
+    });
+
+    it('throws if an extractedTable has already been added', async () => {
+      const [tableInfo] = await tmpHaTablesData.getListOfTables();
+      assert.ok(tableInfo.extractedTable, 'table does not already have an `extractedTable`');
+
+      // Actual BQ table is never created, this is just a local object.
+      const extractedId = getExtractedTableId(tableInfo);
+      const repeatExtractedTable = extractedDataset.table(extractedId);
+
+      assert.throws(() => {
+        return HaTablesData.addExtractedTable(tableInfo, repeatExtractedTable);
+      }, /^Error: tableInfo already has an `extractedTable`$/);
+    });
+
+    it('throws if extractedTable was created with a different dataset', async () => {
+      const tablesInfo = await tmpHaTablesData.getListOfTables();
+      const tableInfo = tablesInfo[1];
+      assert.ok(!tableInfo.extractedTable, 'table already has an `extractedTable`');
+
+      // Actual BQ dataset and table are never created, these are just local objects.
+      const nonsenseDataset = bigQuery.dataset('nonsense_id');
+      const extractedId = getExtractedTableId(tableInfo);
+      const nonsenseExtractedTable = nonsenseDataset.table(extractedId);
+
+      assert.throws(() => {
+        return HaTablesData.addExtractedTable(tableInfo, nonsenseExtractedTable);
+      }, /^Error: `extractedTable` from a different dataset than the one in `tableInfo`$/);
+
+      assert.ok(!tableInfo.extractedTable, 'an `extractedTable` was added to the table');
+    });
+
+    it('can add an extracted table to a tableInfo', async function() {
+      const tablesInfo = await tmpHaTablesData.getListOfTables();
+      const tableInfo = tablesInfo[1];
+      assert.ok(!tableInfo.extractedTable, 'table already has an `extractedTable`');
+
+      // Actual BQ table is never created, this is just a local object.
+      const badExtractedId = 'just_really_useless_stuff_here';
+      const extractedBadIdTable = extractedDataset.table(badExtractedId);
+
+      assert.throws(() => {
+        return HaTablesData.addExtractedTable(tableInfo, extractedBadIdTable);
+      // eslint-disable-next-line max-len
+      }, /^Error: extractedTable 'just_really_useless_stuff_here' did not match expected id 'lh_extract_20\d\d_\d\d_01'$/);
+
+      assert.ok(!tableInfo.extractedTable, 'an `extractedTable` was added to the table');
+    });
+  });
+
+  describe('#getExtractedTableId', () => {
+    it('returns an extracted table id', () => {
+      const tableId = getExtractedTableId({year: 2020, month: 12});
+      assert.strictEqual(tableId, 'lh_extract_2020_12_01');
+    });
+
+    it('zero pads a single digit month', () => {
+      const tableId = getExtractedTableId({year: 2021, month: 2});
+      assert.strictEqual(tableId, 'lh_extract_2021_02_01');
+    });
+
+    it('throws for non-integer or out of range months', () => {
+      assert.throws(() => getExtractedTableId({year: 2021, month: 1.5}),
+          /^Error: Invalid.+month 1.5$/);
+      assert.throws(() => getExtractedTableId({year: 2021, month: 0}),
+          /^Error: Invalid.+month 0$/);
+      assert.throws(() => getExtractedTableId({year: 2021, month: -1}),
+          /^Error: Invalid.+month -1$/);
+      assert.throws(() => getExtractedTableId({year: 2021, month: 13}),
+          /^Error: Invalid.+month 13$/);
+    });
+
+    it('throws for non-integer or out of range years', () => {
+      assert.throws(() => getExtractedTableId({year: 2020.4, month: 2}),
+          /^Error: Invalid.+year 2020.4$/);
+      assert.throws(() => getExtractedTableId({year: 1950, month: 3}),
+          /^Error: Invalid.+year 1950$/);
+      assert.throws(() => getExtractedTableId({year: 2525, month: 4}),
+          /^Error: Invalid.+year 2525$/);
+    });
+  });
+
+  describe('#assertValidMonth', () => {
+    it('throws for out-of-range months', () => {
+      assert.throws(() => assertValidMonth(0), /^Error: Invalid.+month 0$/);
+      assert.throws(() => assertValidMonth(-1), /^Error: Invalid.+month -1$/);
+      assert.throws(() => assertValidMonth(13), /^Error: Invalid.+month 13$/);
+    });
+
+    it('throws for non-integer months', () => {
+      assert.throws(() => assertValidMonth(1.5), /^Error: Invalid.+month 1.5$/);
+      assert.throws(() => assertValidMonth(1 + Number.EPSILON),
+          /^Error: Invalid.+month 1.0000000000000002$/);
+    });
+  });
+
+  describe('#assertValidYear', () => {
+    it('throws for out-of-range years', () => {
+      assert.throws(() => assertValidYear(1950), /^Error: Invalid.+year 1950$/);
+      assert.throws(() => assertValidYear(-1), /^Error: Invalid.+year -1$/);
+      assert.throws(() => assertValidYear(2525), /^Error: Invalid.+year 2525$/);
+    });
+
+    it('throws for non-integer years', () => {
+      assert.throws(() => assertValidYear(2020.4), /^Error: Invalid.+year 2020.4$/);
+      assert.throws(() => assertValidYear(2020 - ((2 ** 9 + 1) * Number.EPSILON)),
+          /^Error: Invalid.+year 2019.9999999999998$/);
     });
   });
 });
