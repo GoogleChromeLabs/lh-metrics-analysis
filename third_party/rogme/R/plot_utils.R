@@ -277,7 +277,7 @@ plotDecileLinks <- function(p,
   # Add labels for differences between extreme deciles and median.
   if (add_lab == TRUE) {
     for (d in c(1, ceiling(qn / 2), qn)) {
-      label_value = label_values[d]
+      label_value <- label_values[d]
       # Add explicit sign for display.
       if (label_value < 0) {
         label_sign <- "-"
