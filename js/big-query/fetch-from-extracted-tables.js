@@ -249,7 +249,10 @@ async function getMetricQueryResults(metricQuery, extractedDataset, metricValueI
     console.warn('  Downloading query results from cloud storage...');
     const [results] = await tmpFile.download();
 
-    return {results, numRows: Number(metadata.numRows)};
+    return {
+      results,
+      numRows: Number(metadata.numRows),
+    };
   } finally {
     // Clean up tmp file regardless of outcome.
     console.warn('  Cleaning up storage temp file...');
