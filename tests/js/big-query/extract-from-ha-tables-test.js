@@ -23,14 +23,11 @@ import {strict as assert} from 'assert';
 import BQModule from '@google-cloud/bigquery';
 const {BigQuery} = BQModule;
 
-import HaTablesData from '../../../js/big-query/ha-tables-data.js';
+import HaTablesData, {getExtractedTableId} from '../../../js/big-query/ha-tables-data.js';
 import credentials from '../../../js/big-query/auth/credentials.js';
 import {assertValidBigQueryId} from '../../../js/big-query/bq-utils.js';
 import {
-  getExtractedTableId,
   extractMetricsFromHaLhrs,
-  assertValidYear,
-  assertValidMonth,
   getTotalRows,
 } from '../../../js/big-query/extract-from-ha-tables.js';
 
@@ -46,7 +43,7 @@ const testSourceDataset = {
   haProjectId: 'lh-metrics-analysis',
   haDatasetId: 'test_lighthouse',
 };
-// Destination dataset for test.
+// Extracted dataset for test.
 const extractedDatasetId = 'test_lh_extract';
 
 /**
@@ -70,8 +67,8 @@ async function getExtractedTableContents(extractedTable) {
 describe('Extraction from HTTP Archive tables', () => {
   describe('#extractMetricsFromHaLhrs', () => {
     const bigQuery = new BigQuery(credentials);
-    const haTablesData = new HaTablesData(bigQuery, testSourceDataset);
-    const destinationDataset = bigQuery.dataset(extractedDatasetId);
+    const extractedDataset = bigQuery.dataset(extractedDatasetId);
+    const haTablesData = new HaTablesData(extractedDataset, testSourceDataset);
 
     before('initialize ha tables data', async function() {
       // First request to BQ can take a while, so give it a bit.
@@ -82,10 +79,10 @@ describe('Extraction from HTTP Archive tables', () => {
 
     describe('Input validation', () => {
       it('throws if not using custom source tables in a testing env (like this one)', async () => {
-        const defaultHaTablesData = new HaTablesData(bigQuery);
+        const defaultHaTablesData = new HaTablesData(extractedDataset);
         const tables = await defaultHaTablesData.getListOfTables();
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(tables[0], destinationDataset);
+          return extractMetricsFromHaLhrs(tables[0]);
         }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
       });
 
@@ -94,7 +91,7 @@ describe('Extraction from HTTP Archive tables', () => {
         const badSourceDataset = {haProjectId: ')(---)(', haDatasetId: '|||'};
         const badTable = {...realTable, sourceDataset: badSourceDataset};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(badTable, destinationDataset);
+          return extractMetricsFromHaLhrs(badTable);
         }, /^Error: invalid GCloud project id '\)\(---\)\('$/);
       });
 
@@ -103,7 +100,7 @@ describe('Extraction from HTTP Archive tables', () => {
         const badSourceDataset = {haProjectId: 'a--b', haDatasetId: '|||'};
         const badTable = {...realTable, sourceDataset: badSourceDataset};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(badTable, destinationDataset);
+          return extractMetricsFromHaLhrs(badTable);
         }, /^Error: invalid BigQuery id '|||'$/);
       });
 
@@ -111,12 +108,12 @@ describe('Extraction from HTTP Archive tables', () => {
         const [realTable] = await haTablesData.getListOfTables();
         const testTable = {...realTable, month: -1};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(testTable, destinationDataset);
+          return extractMetricsFromHaLhrs(testTable);
         }, /^Error: Invalid.+month -1$/);
 
         const testTable2 = {...realTable, month: 2.5};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(testTable2, destinationDataset);
+          return extractMetricsFromHaLhrs(testTable2);
         }, /^Error: Invalid.+month 2.5$/);
       });
 
@@ -124,18 +121,17 @@ describe('Extraction from HTTP Archive tables', () => {
         const [realTable] = await haTablesData.getListOfTables();
         const testTable = {...realTable, year: -1};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(testTable, destinationDataset);
+          return extractMetricsFromHaLhrs(testTable);
         }, /^Error: Invalid.+year -1$/);
 
         const testTable2 = {...realTable, year: 2020.6};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(testTable2, destinationDataset);
+          return extractMetricsFromHaLhrs(testTable2);
         }, /^Error: Invalid.+year 2020.6$/);
       });
     });
 
     describe('lhr extraction (slow start while extracting)', async () => {
-      const testDataset = bigQuery.dataset(extractedDatasetId);
       const preservedConsoleWarn = console.warn;
 
       /**
@@ -160,17 +156,17 @@ describe('Extraction from HTTP Archive tables', () => {
         console.warn = () => {};
 
         // ensure it starts with an empty dataset.
-        const [datasetExists] = await testDataset.exists();
+        const [datasetExists] = await extractedDataset.exists();
         assert.ok(datasetExists, `need a dataset '${extractedDatasetId}' for testing`);
 
-        const [tables] = await testDataset.getTables();
+        const [tables] = await extractedDataset.getTables();
         assert.strictEqual(tables.length, 0,
             `test dataset ${extractedDatasetId} should not contain tables when starting`);
 
         // Also demonstrates function can be used concurrently.
         const extractedTableRequests = sourceTables.map(async sourceTableInfo => {
           try {
-            const extractedTable = await extractMetricsFromHaLhrs(sourceTableInfo, testDataset);
+            const extractedTable = await extractMetricsFromHaLhrs(sourceTableInfo);
             /** @type {[string, Table]} */
             const result = [sourceTableInfo.tableId, extractedTable];
             return result;
@@ -193,12 +189,12 @@ describe('Extraction from HTTP Archive tables', () => {
       });
 
       after(async () => {
-        const [testTables] = await testDataset.getTables();
+        const [testTables] = await extractedDataset.getTables();
         await Promise.all(testTables.map(testTable => testTable.delete()));
 
-        const [afterTables] = await testDataset.getTables();
+        const [afterTables] = await extractedDataset.getTables();
         assert.strictEqual(afterTables.length, 0,
-            `failed to clear test dataset '${testDataset.id}'`);
+            `failed to clear test dataset '${extractedDataset.id}'`);
 
         console.warn = preservedConsoleWarn;
       });
@@ -252,7 +248,7 @@ describe('Extraction from HTTP Archive tables', () => {
          */
         async function getTableAndMetadata({year, month}) {
           const extractedTableId = getExtractedTableId({year, month});
-          const existingTable = testDataset.table(extractedTableId);
+          const existingTable = extractedDataset.table(extractedTableId);
           const [tableExists] = await existingTable.exists();
           assert.ok(tableExists);
           const [existingMetadata] = await existingTable.getMetadata();
@@ -268,14 +264,15 @@ describe('Extraction from HTTP Archive tables', () => {
         /**
          * Retrieves the HaTableInfo for the HTTP Archive table matching the
          * given date.
+         * @param {HaTablesData} haTablesData
          * @param {{year: number, month: number}} tableInfo
          * @return {Promise<HaTableInfo>}
          */
-        async function getTableInfo({year, month}) {
+        async function getTableInfo(haTablesData, {year, month}) {
           const tables = await haTablesData.getListOfTables();
-          const firstTableInfo = tables.find(t => t.year === year && t.month === month);
-          assert.ok(firstTableInfo);
-          return firstTableInfo;
+          const firstMatchInfo = tables.find(t => t.year === year && t.month === month);
+          assert.ok(firstMatchInfo);
+          return firstMatchInfo;
         }
 
         it('reuses a table if already extracted', async () => {
@@ -284,8 +281,28 @@ describe('Extraction from HTTP Archive tables', () => {
           const {existingMetadata} = await getTableAndMetadata(firstDate);
 
           // Extract from the first HA table again.
-          const firstTableInfo = await getTableInfo(firstDate);
-          const extractedFirstTable = await extractMetricsFromHaLhrs(firstTableInfo, testDataset);
+          // NOTE: extractedTable likely from cache on haTableInfo.
+          const firstTableInfo = await getTableInfo(haTablesData, firstDate);
+          const extractedFirstTable = await extractMetricsFromHaLhrs(firstTableInfo);
+          const [newMetadata] = await extractedFirstTable.getMetadata();
+
+          assert.strictEqual(newMetadata.etag, existingMetadata.etag);
+
+          // In theory the etag should be sufficient, but just in case...
+          assert.strictEqual(newMetadata.creationTime, existingMetadata.creationTime);
+          assert.strictEqual(newMetadata.lastModifiedTime, existingMetadata.lastModifiedTime);
+          assert.strictEqual(newMetadata.numBytes, existingMetadata.numBytes);
+        });
+
+        it('reuses a table if already extracted, even from a fresh HaTableInfo', async () => {
+          // First table in test set (and HTTP Archive).
+          const firstDate = {year: 2017, month: 6};
+          const {existingMetadata} = await getTableAndMetadata(firstDate);
+
+          // Extract again from a fresh version of the first HA.
+          const freshHaTablesData = new HaTablesData(extractedDataset, testSourceDataset);
+          const firstTableInfo = await getTableInfo(freshHaTablesData, firstDate);
+          const extractedFirstTable = await extractMetricsFromHaLhrs(firstTableInfo);
           const [newMetadata] = await extractedFirstTable.getMetadata();
 
           assert.strictEqual(newMetadata.etag, existingMetadata.etag);
@@ -307,9 +324,10 @@ describe('Extraction from HTTP Archive tables', () => {
           schema.fields.push({name: 'not_a_likely_column', type: 'FLOAT'});
           await existingTable.setMetadata(existingMetadata);
 
-          // Extract from the first HA table again.
-          const firstTableInfo = await getTableInfo(firstDate);
-          const extractedFirstTable = await extractMetricsFromHaLhrs(firstTableInfo, testDataset);
+          // Extract again from a fresh version of the first HA table.
+          const freshHaTablesData = new HaTablesData(extractedDataset, testSourceDataset);
+          const firstTableInfo = await getTableInfo(freshHaTablesData, firstDate);
+          const extractedFirstTable = await extractMetricsFromHaLhrs(firstTableInfo);
           const [newMetadata] = await extractedFirstTable.getMetadata();
 
           // Table should be recreated, so creationTime should be new.
@@ -333,15 +351,16 @@ describe('Extraction from HTTP Archive tables', () => {
           await existingTable.delete();
 
           // Create a new table with the same schema but empty.
-          const emptyNewTable = testDataset.table(existingTableId);
+          const emptyNewTable = extractedDataset.table(existingTableId);
           await emptyNewTable.create({schema});
           const [emptyMetadata] = await emptyNewTable.getMetadata();
           assert.strictEqual(Number(emptyMetadata.numRows), 0);
           assert.strictEqual(Number(emptyMetadata.numBytes), 0);
 
-          // Extract from the first HA table again.
-          const secondTableInfo = await getTableInfo(secondDate);
-          const extractedNewTable = await extractMetricsFromHaLhrs(secondTableInfo, testDataset);
+          // Extract again from a fresh version of the second HA table.
+          const freshHaTablesData = new HaTablesData(extractedDataset, testSourceDataset);
+          const secondTableInfo = await getTableInfo(freshHaTablesData, secondDate);
+          const extractedNewTable = await extractMetricsFromHaLhrs(secondTableInfo);
           const [newMetadata] = await extractedNewTable.getMetadata();
 
           // Table should be recreated, so creationTime should be new.
@@ -358,13 +377,14 @@ describe('Extraction from HTTP Archive tables', () => {
 
   describe('#getTotalRows', () => {
     const bigQuery = new BigQuery(credentials);
-    const haTablesData = new HaTablesData(bigQuery, testSourceDataset);
+    const extractedDataset = bigQuery.dataset(extractedDatasetId);
+    const haTablesData = new HaTablesData(extractedDataset, testSourceDataset);
 
     it('throws if not using custom source tables in a testing env (like this one)', async () => {
-      const defaultHaTablesData = new HaTablesData(bigQuery);
+      const defaultHaTablesData = new HaTablesData(extractedDataset);
       const tables = await defaultHaTablesData.getListOfTables();
       await assert.rejects(async () => {
-        return getTotalRows(bigQuery, tables[0]);
+        return getTotalRows(tables[0]);
       }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
     });
 
@@ -374,10 +394,11 @@ describe('Extraction from HTTP Archive tables', () => {
         month: 1,
         tableId: 'invalid-table-id',
         sourceDataset: testSourceDataset,
+        extractedDataset,
       };
 
       await assert.rejects(async () => {
-        return getTotalRows(bigQuery, badTableInfo);
+        return getTotalRows(badTableInfo);
       }, /^Error: invalid BigQuery id 'invalid-table-id'$/);
     });
 
@@ -387,10 +408,11 @@ describe('Extraction from HTTP Archive tables', () => {
         month: 1,
         tableId: 'not_a_table_id',
         sourceDataset: testSourceDataset,
+        extractedDataset,
       };
 
       await assert.rejects(async () => {
-        return getTotalRows(bigQuery, badTableInfo);
+        return getTotalRows(badTableInfo);
       }, /^Error: unable to find a row count for table 'not_a_table_id'$/);
     });
 
@@ -399,71 +421,11 @@ describe('Extraction from HTTP Archive tables', () => {
       // Use the last one so it stays fairly stable over time.
       const sourceTableInfo = sourceTables[sourceTables.length - 1];
 
-      const totalRows = await getTotalRows(bigQuery, sourceTableInfo);
+      const totalRows = await getTotalRows(sourceTableInfo);
 
       const expectedLength = Object.values(expectedExtractedTables)[0].length;
       assert.notStrictEqual(expectedLength, 0);
       assert.strictEqual(totalRows, expectedLength);
-    });
-  });
-
-  describe('#getExtractedTableId', () => {
-    it('returns an extracted table id', () => {
-      const tableId = getExtractedTableId({year: 2020, month: 12});
-      assert.strictEqual(tableId, 'lh_extract_2020_12_01');
-    });
-
-    it('zero pads a single digit month', () => {
-      const tableId = getExtractedTableId({year: 2021, month: 2});
-      assert.strictEqual(tableId, 'lh_extract_2021_02_01');
-    });
-
-    it('throws for non-integer or out of range months', () => {
-      assert.throws(() => getExtractedTableId({year: 2021, month: 1.5}),
-          /^Error: Invalid.+month 1.5$/);
-      assert.throws(() => getExtractedTableId({year: 2021, month: 0}),
-          /^Error: Invalid.+month 0$/);
-      assert.throws(() => getExtractedTableId({year: 2021, month: -1}),
-          /^Error: Invalid.+month -1$/);
-      assert.throws(() => getExtractedTableId({year: 2021, month: 13}),
-          /^Error: Invalid.+month 13$/);
-    });
-
-    it('throws for non-integer or out of range years', () => {
-      assert.throws(() => getExtractedTableId({year: 2020.4, month: 2}),
-          /^Error: Invalid.+year 2020.4$/);
-      assert.throws(() => getExtractedTableId({year: 1950, month: 3}),
-          /^Error: Invalid.+year 1950$/);
-      assert.throws(() => getExtractedTableId({year: 2525, month: 4}),
-          /^Error: Invalid.+year 2525$/);
-    });
-  });
-
-  describe('#assertValidMonth', () => {
-    it('throws for out-of-range months', () => {
-      assert.throws(() => assertValidMonth(0), /^Error: Invalid.+month 0$/);
-      assert.throws(() => assertValidMonth(-1), /^Error: Invalid.+month -1$/);
-      assert.throws(() => assertValidMonth(13), /^Error: Invalid.+month 13$/);
-    });
-
-    it('throws for non-integer months', () => {
-      assert.throws(() => assertValidMonth(1.5), /^Error: Invalid.+month 1.5$/);
-      assert.throws(() => assertValidMonth(1 + Number.EPSILON),
-          /^Error: Invalid.+month 1.0000000000000002$/);
-    });
-  });
-
-  describe('#assertValidYear', () => {
-    it('throws for out-of-range years', () => {
-      assert.throws(() => assertValidYear(1950), /^Error: Invalid.+year 1950$/);
-      assert.throws(() => assertValidYear(-1), /^Error: Invalid.+year -1$/);
-      assert.throws(() => assertValidYear(2525), /^Error: Invalid.+year 2525$/);
-    });
-
-    it('throws for non-integer years', () => {
-      assert.throws(() => assertValidYear(2020.4), /^Error: Invalid.+year 2020.4$/);
-      assert.throws(() => assertValidYear(2020 - ((2 ** 9 + 1) * Number.EPSILON)),
-          /^Error: Invalid.+year 2019.9999999999998$/);
     });
   });
 });

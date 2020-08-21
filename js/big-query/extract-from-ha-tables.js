@@ -21,6 +21,11 @@
  */
 
 import {assertValidProjectId, assertValidBigQueryId} from './bq-utils.js';
+import HaTablesData, {
+  assertValidMonth,
+  assertValidYear,
+  getExtractedTableId,
+} from './ha-tables-data.js';
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
 /** @typedef {Immutable<import('@google-cloud/bigquery').TableSchema>} TableSchema */
@@ -38,37 +43,11 @@ import {assertValidProjectId, assertValidBigQueryId} from './bq-utils.js';
  * @typedef {'requested_url'|'final_url'|'lh_version'|'runtime_error_code'|'chrome_version'|'performance_score'|MetricValueId} ExtractedColumnId
  */
 
-// TODO(bckenny): use in caller
-const EXTRACTED_DATASET_ID = 'lh_extract'; // eslint-disable-line no-unused-vars
-
 // TODO(bckenny): generate null perf scores in lhrs < 3.0 when errors were 0 instead of null
 // TODO(bckenny): perf error run (null perf score)?
 // TODO(bckenny): Number/percentage of errored audits?
 // TODO(bckenny): should usually ignore e.g. FAILED_DOCUMENT_REQUEST but still have all metrics?
 // TODO(bckenny): should runWarning "The page loaded too slowly to finish" be considered valid metrics?
-
-/**
- * Asserts valid year for HTTP Archive tables (though a table with this year may
- * not exist).
- * @param {number} year
- */
-function assertValidYear(year) {
-  if (!Number.isInteger(year) || year < 2017 || year > 2050) {
-    throw new Error(`Invalid HTTP Archive run year ${year}`);
-  }
-}
-
-/**
- * Asserts valid month for HTTP Archive tables (though a table with this month
- * may not exist). Note that month is assumed to be in [1, 12], *not* [0, 11] as
- * is usual in JS dates.
- * @param {number} month
- */
-function assertValidMonth(month) {
-  if (!Number.isInteger(month) || month < 1 || month > 12) {
-    throw new Error(`Invalid HTTP Archive run month ${month}`);
-  }
-}
 
 /**
  * Assert the source project/dataset ids to extract from are valid and,
@@ -99,19 +78,6 @@ function getFullHttpArchiveTableId({year, month, sourceDataset: {haProjectId, ha
 
   const paddedMonth = String(month).padStart(2, '0');
   return `${haProjectId}.${haDatasetId}.${year}_${paddedMonth}_01_mobile`;
-}
-
-/**
- * Returns a standard extracted table ID for the given date. Month is
- * assumed to be in [1, 12], not [0, 11] as is usual in JS dates.
- * @param {{year: number, month: number}} tableInfo
- */
-function getExtractedTableId({year, month}) {
-  assertValidYear(year);
-  assertValidMonth(month);
-
-  const paddedMonth = String(month).padStart(2, '0');
-  return `lh_extract_${year}_${paddedMonth}_01`;
 }
 
 /**
@@ -436,32 +402,38 @@ async function createExtractedTable(extractedTable, haTableInfo) {
 
 /**
  * Extracts the key metrics from the LHR JSON strings in the given HTTP Archive
- * table and saves them as columns in a matching table ID in the
- * `destinationDataset`.
- * If a table by that ID already exists (and it matches the expected schema), no
- * additional work is done.
+ * table and saves them as columns in a matching extracted table in
+ * `extractedDataset` from `haTableInfo`. If a table by that ID already exists
+ * (and it matches the expected schema), no additional work is done.
  * Returns a reference to the table with the extracted metrics.
  * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in the `HaTableInfo`.
+ * tables, but this can be overriden in `HaTableInfo.sourceDataset`.
  * @param {HaTableInfo} haTableInfo
- * @param {Dataset} destinationDataset
  * @return {Promise<Table>}
  */
-async function extractMetricsFromHaLhrs(haTableInfo, destinationDataset) {
+async function extractMetricsFromHaLhrs(haTableInfo) {
   // Fail early on invalid input.
   assertValidYear(haTableInfo.year);
   assertValidMonth(haTableInfo.month);
   assertValidSourceDataset(haTableInfo.sourceDataset);
 
-  const extractedTableId = getExtractedTableId(haTableInfo);
-  const extractedTable = destinationDataset.table(extractedTableId);
+  // haTableInfos are created only in this process. Assume no one is changing
+  // schemas since process began and so can return `extractedTable` if present.
+  if (haTableInfo.extractedTable) {
+    return haTableInfo.extractedTable;
+  }
 
-  // Check if LHR has already been extracted and existing table's schema looks right.
+  const extractedTableId = getExtractedTableId(haTableInfo);
+  const {extractedDataset} = haTableInfo;
+  const extractedTable = extractedDataset.table(extractedTableId);
+
+  // Otherwise, check if LHR has already been extracted and existing table's schema looks right.
   const tableExists = await isExistingTable(extractedTable);
   if (tableExists) {
     console.warn('  Table already exists. Checking if schema matches...');
     const isValid = await isExtractedTableValid(extractedTable);
     if (isValid) {
+      HaTablesData.addExtractedTable(haTableInfo, extractedTable);
       console.warn('  Table is good to go. Using it.');
       return extractedTable;
     }
@@ -478,22 +450,22 @@ async function extractMetricsFromHaLhrs(haTableInfo, destinationDataset) {
   // Throw if somehow the extracted table is invalid or empty.
   const isValid = await isExtractedTableValid(extractedTable);
   if (!isValid) {
-    throw new Error(`extracted table '${destinationDataset.id}.${extractedTableId}' ` +
+    throw new Error(`extracted table '${extractedDataset.id}.${extractedTableId}' ` +
         'is empty or invalid');
   }
 
+  HaTablesData.addExtractedTable(haTableInfo, extractedTable);
   return extractedTable;
 }
 
 /**
  * Returns the total number of rows in the given table.
  * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in the `HaTableInfo`.
- * @param {BigQuery} bigQuery
+ * tables, but this can be overriden in the `HaTableInfo.sourceDataset`.
  * @param {HaTableInfo} haTableInfo
  * @return {Promise<number>}
  */
-async function getTotalRows(bigQuery, haTableInfo) {
+async function getTotalRows(haTableInfo) {
   const {tableId, sourceDataset: {haProjectId, haDatasetId}} = haTableInfo;
   assertValidBigQueryId(tableId);
   assertValidSourceDataset({haProjectId, haDatasetId});
@@ -502,7 +474,7 @@ async function getTotalRows(bigQuery, haTableInfo) {
     FROM \`${haProjectId}.${haDatasetId}.__TABLES__\`
     WHERE table_id = '${tableId}'`;
 
-  const [rows] = await bigQuery.query({
+  const [rows] = await haTableInfo.extractedDataset.bigQuery.query({
     query: rowNumQuery,
   });
 
@@ -517,9 +489,6 @@ async function getTotalRows(bigQuery, haTableInfo) {
 }
 
 export {
-  getExtractedTableId,
   extractMetricsFromHaLhrs,
-  assertValidYear,
-  assertValidMonth,
   getTotalRows,
 };

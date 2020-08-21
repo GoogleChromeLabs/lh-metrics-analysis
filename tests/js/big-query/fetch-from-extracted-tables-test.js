@@ -45,7 +45,7 @@ const testSourceDataset = {
   haProjectId: 'lh-metrics-analysis',
   haDatasetId: 'test_lighthouse',
 };
-// Destination dataset for test.
+// Extracted dataset for test.
 const extractedDatasetId = 'test_lh_extract';
 
 /**
@@ -64,7 +64,8 @@ async function assertEmptyDataset(dataset) {
 
 describe('Fetching from extracted metrics tables', () => {
   const bigQuery = new BigQuery(credentials);
-  const haTablesData = new HaTablesData(bigQuery, testSourceDataset);
+  const extractedDataset = bigQuery.dataset(extractedDatasetId);
+  const haTablesData = new HaTablesData(extractedDataset, testSourceDataset);
 
   /** @type {HaTableInfo} */
   let may2020TableInfo;
@@ -185,11 +186,10 @@ describe('Fetching from extracted metrics tables', () => {
   describe('Fetching', function() {
     this.timeout(20_000);
 
-    const testDataset = bigQuery.dataset(extractedDatasetId);
     const preservedConsoleWarn = console.warn;
 
     before(async function() {
-      await assertEmptyDataset(testDataset);
+      await assertEmptyDataset(extractedDataset);
 
       // Silence console during test.
       console.warn = () => {};
@@ -197,24 +197,24 @@ describe('Fetching from extracted metrics tables', () => {
 
     after(async () => {
       // Delete any tables created during test.
-      const [testTables] = await testDataset.getTables();
+      const [testTables] = await extractedDataset.getTables();
       await Promise.all(testTables.map(testTable => testTable.delete()));
 
-      await assertEmptyDataset(testDataset);
+      await assertEmptyDataset(extractedDataset);
 
       console.warn = preservedConsoleWarn;
     });
 
     it('throws if not using custom source tables in a testing env (like this one)', async () => {
-      const defaultHaTablesData = new HaTablesData(bigQuery);
+      const defaultHaTablesData = new HaTablesData(extractedDataset);
       const tables = await defaultHaTablesData.getListOfTables();
 
       await assert.rejects(async () => {
-        return fetchSingleTableMetric(tables[0], 'lcp_value', testDataset);
+        return fetchSingleTableMetric(tables[0], 'lcp_value');
       }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
 
       await assert.rejects(async () => {
-        return fetchPairedTablesMetric(tables[0], tables[1], 'lcp_value', testDataset);
+        return fetchPairedTablesMetric(tables[0], tables[1], 'lcp_value');
       }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
     });
 
@@ -231,8 +231,7 @@ describe('Fetching from extracted metrics tables', () => {
       });
 
       it('downloads a metric from a table', async () => {
-        const {filename, numRows} = await fetchSingleTableMetric(may2020TableInfo, metricValueId,
-            testDataset);
+        const {filename, numRows} = await fetchSingleTableMetric(may2020TableInfo, metricValueId);
         savedFilename = filename;
 
         assert.ok(fs.existsSync(savedFilename));
@@ -243,8 +242,8 @@ describe('Fetching from extracted metrics tables', () => {
 
       // Dependent on above test being run first.
       it('should use the same filename as #getSingleSaveFilename', async () => {
-        // This should come from cache since it will have just been extracted by the above.
-        const extractedTable = await extractMetricsFromHaLhrs(may2020TableInfo, testDataset);
+        // This should come from tableInfo since it will have just been extracted by the above.
+        const extractedTable = await extractMetricsFromHaLhrs(may2020TableInfo);
 
         // Get where it should have been saved.
         const [{etag}] = await extractedTable.getMetadata();
@@ -265,9 +264,9 @@ describe('Fetching from extracted metrics tables', () => {
         const {ctime: originalCtime} = fs.statSync(savedFilename);
         const {length: originalFileCount} = fs.readdirSync(path.dirname(savedFilename));
 
-        // Fetch again.
+        // Attempt to fetch again.
         const {filename: repeatSavedFilename, numRows: numRowsFromFile} =
-            await fetchSingleTableMetric(may2020TableInfo, metricValueId, testDataset);
+            await fetchSingleTableMetric(may2020TableInfo, metricValueId);
         assert.strictEqual(repeatSavedFilename, savedFilename);
         assert.ok(fs.existsSync(savedFilename));
 
@@ -305,8 +304,7 @@ describe('Fetching from extracted metrics tables', () => {
 
       it('throws if pairing the same table with itself', async () => {
         await assert.rejects(async () => {
-          return fetchPairedTablesMetric(aug2017TableInfo, aug2017TableInfo, metricValueId,
-              testDataset);
+          return fetchPairedTablesMetric(aug2017TableInfo, aug2017TableInfo, metricValueId);
         }, /^Error: Cannot fetch with same table as base and compare$/);
       });
 
@@ -318,7 +316,7 @@ describe('Fetching from extracted metrics tables', () => {
 
         // july2018TableInfo and aug2017TableInfo test tables have wikipedia in common.
         const {filename, numRows} = await fetchPairedTablesMetric(aug2017TableInfo,
-            july2018TableInfo, metricValueId, testDataset);
+            july2018TableInfo, metricValueId);
         savedFilename = filename;
 
         assert.ok(fs.existsSync(savedFilename));
@@ -329,10 +327,9 @@ describe('Fetching from extracted metrics tables', () => {
 
       // Dependent on above test being run first.
       it('should use the same filename as #getPairedSaveFilename', async () => {
-        // These should come from cache since they will have just been extracted by the above.
-        const extractedBaseTable = await extractMetricsFromHaLhrs(aug2017TableInfo, testDataset);
-        const extractedCompareTable = await extractMetricsFromHaLhrs(july2018TableInfo,
-            testDataset);
+        // These should come from tableInfo since they will have just been extracted by the above.
+        const extractedBaseTable = await extractMetricsFromHaLhrs(aug2017TableInfo);
+        const extractedCompareTable = await extractMetricsFromHaLhrs(july2018TableInfo);
 
         // Get where it should have been saved.
         const [{etag: baseEtag}] = await extractedBaseTable.getMetadata();
@@ -354,10 +351,9 @@ describe('Fetching from extracted metrics tables', () => {
         const {ctime: originalCtime} = fs.statSync(savedFilename);
         const {length: originalFileCount} = fs.readdirSync(path.dirname(savedFilename));
 
-        // Fetch again.
+        // Attempt to fetch again.
         const {filename: repeatSavedFilename, numRows: numRowsFromFile} =
-            // eslint-disable-next-line max-len
-            await fetchPairedTablesMetric(aug2017TableInfo, july2018TableInfo, metricValueId, testDataset);
+            await fetchPairedTablesMetric(aug2017TableInfo, july2018TableInfo, metricValueId);
         assert.strictEqual(repeatSavedFilename, savedFilename);
         assert.ok(fs.existsSync(savedFilename));
 
@@ -380,16 +376,15 @@ describe('Fetching from extracted metrics tables', () => {
 
     describe('#fetchUniqueValueCounts', () => {
       it('throws if not using custom source tables in a testing env (like this one)', async () => {
-        const defaultHaTablesData = new HaTablesData(bigQuery);
+        const defaultHaTablesData = new HaTablesData(extractedDataset);
         const tables = await defaultHaTablesData.getListOfTables();
         await assert.rejects(async () => {
-          return fetchUniqueValueCounts(tables[0], 'lh_version', testDataset);
+          return fetchUniqueValueCounts(tables[0], 'lh_version');
         }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
       });
 
       it('downloads the counts of unique values in a column', async () => {
-        const lhVersionCounts = await fetchUniqueValueCounts(may2020TableInfo,
-            'lh_version', testDataset);
+        const lhVersionCounts = await fetchUniqueValueCounts(may2020TableInfo, 'lh_version');
 
         assert.deepStrictEqual(lhVersionCounts, {
           '5.6.0': 4,
@@ -399,7 +394,7 @@ describe('Fetching from extracted metrics tables', () => {
 
       it('includes a \'null\' key if a `null` value was found and counted', async () => {
         const lhVersionCounts = await fetchUniqueValueCounts(may2020TableInfo,
-          'runtime_error_code', testDataset);
+          'runtime_error_code');
 
         assert.deepStrictEqual(lhVersionCounts, {
           'CHROME_INTERSTITIAL_ERROR': 1,
@@ -416,7 +411,7 @@ describe('Fetching from extracted metrics tables', () => {
         const columnId = 'Robert\'); DROP TABLE Students; --';
 
         await assert.rejects(async () => {
-          return fetchUniqueValueCounts(may2020TableInfo, columnId, testDataset);
+          return fetchUniqueValueCounts(may2020TableInfo, columnId);
         // eslint-disable-next-line max-len
         }, /^Error: invalid characters in BigQuery column name \('Robert'\); DROP TABLE Students; --'\)$/);
       });
@@ -426,7 +421,7 @@ describe('Fetching from extracted metrics tables', () => {
         const tableInfo = {...may2020TableInfo, year: 2525};
 
         await assert.rejects(async () => {
-          return fetchUniqueValueCounts(tableInfo, 'chrome_version', testDataset);
+          return fetchUniqueValueCounts(tableInfo, 'chrome_version');
         // eslint-disable-next-line max-len
         }, /^Error: Invalid HTTP Archive run year 2525$/);
       });

@@ -18,14 +18,53 @@ import {assertValidProjectId, assertValidBigQueryId} from './bq-utils.js';
 
 /**
  * @fileoverview A class that lazily queries the available HTTPArchive
- * Lighthouse monthly tables and provides the info needed to query them.
+ * Lighthouse monthly tables and provides the info needed to query them and
+ * their extracted form.
  */
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
+/** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
+/** @typedef {import('@google-cloud/bigquery').Table} Table */
 /** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
 
 const DEFAULT_HA_PROJECT_ID = 'httparchive';
 const DEFAULT_HA_DATASET_ID = 'lighthouse';
+
+/**
+ * Asserts valid year for HTTP Archive tables (though a table with this year may
+ * not exist).
+ * @param {number} year
+ */
+export function assertValidYear(year) {
+  if (!Number.isInteger(year) || year < 2017 || year > 2050) {
+    throw new Error(`Invalid HTTP Archive run year ${year}`);
+  }
+}
+
+/**
+ * Asserts valid month for HTTP Archive tables (though a table with this month
+ * may not exist). Note that month is assumed to be in [1, 12], *not* [0, 11] as
+ * is usual in JS dates.
+ * @param {number} month
+ */
+export function assertValidMonth(month) {
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new Error(`Invalid HTTP Archive run month ${month}`);
+  }
+}
+
+/**
+ * Returns a standard extracted table ID for the given date. Month is
+ * assumed to be in [1, 12], not [0, 11] as is usual in JS dates.
+ * @param {{year: number, month: number}} tableInfo
+ */
+export function getExtractedTableId({year, month}) {
+  assertValidYear(year);
+  assertValidMonth(month);
+
+  const paddedMonth = String(month).padStart(2, '0');
+  return `lh_extract_${year}_${paddedMonth}_01`;
+}
 
 export default class HaTablesData {
   /**
@@ -49,16 +88,55 @@ export default class HaTablesData {
   _sourceDataset;
 
   /**
-   * A class that lazily queries the available HTTP Archive Lighthouse monthly
-   * tables.
+   * @type {Dataset}
+   * @private
+   */
+  _extractedDataset;
+
+  /**
+   * A class that represents the available HTTP Archive Lighthouse monthly
+   * tables, both in the "source" form of full JSON LHRs stored as string blobs
+   * and as the "extracted" tables filled with values pulled from the "source".
+   * `extractedDataset` is the dataset where the breakdown of values from the
+   * full LHRs will be stored in extracted tables.
    * By default these are extracted from the official `httparchive.lighthouse.*`
    * tables, but this can be overriden via `sourceDataset`.
-   * @param {BigQuery} bigQuery
+   * @param {Dataset} extractedDataset
    * @param {HaTableInfo['sourceDataset']} [sourceDataset]
    */
-  constructor(bigQuery, sourceDataset) {
-    this._bigQuery = bigQuery;
+  constructor(extractedDataset, sourceDataset) {
+    this._extractedDataset = extractedDataset;
+    this._bigQuery = extractedDataset.bigQuery;
     this._sourceDataset = this._initAndCheckSourceDataset(sourceDataset);
+  }
+
+  /**
+   * Do some basic, local checks that `extractedTable` is the extracted form of
+   * `tableInfo`, then break `HaTableInfo` readonlyness and add `extractedTable`
+   * to `tableInfo`.
+   * @param {HaTableInfo} tableInfo
+   * @param {Table} extractedTable
+   */
+  static addExtractedTable(tableInfo, extractedTable) {
+    // Checks are a little strict until there's a need for relaxing them.
+    // For now, don't allow re-adding a table. Check first next time.
+    if (tableInfo.extractedTable) {
+      throw new Error('tableInfo already has an `extractedTable`');
+    }
+
+    // Require creating by the same dataset JS instance, not just same BQ dataset.
+    if (extractedTable.dataset !== tableInfo.extractedDataset) {
+      throw new Error('`extractedTable` from a different dataset than the one in `tableInfo`');
+    }
+
+    const expectedExtractedId = getExtractedTableId(tableInfo);
+    if (expectedExtractedId !== extractedTable.id) {
+      // eslint-disable-next-line max-len
+      throw new Error(`extractedTable '${extractedTable.id}' did not match expected id '${expectedExtractedId}'`);
+    }
+
+    // @ts-expect-error - break readonly to add `extractedTable`.
+    tableInfo.extractedTable = extractedTable;
   }
 
   /**
@@ -112,6 +190,7 @@ export default class HaTablesData {
             haProjectId,
             haDatasetId,
           },
+          extractedDataset: this._extractedDataset,
         };
       });
 

@@ -16,6 +16,9 @@
 
 // Common types that are easier to declare in typescript syntax than jsdoc.
 
+import {Dataset, Table} from '@google-cloud/bigquery';
+
+// Can't do readonly and document each property in jsdoc.
 /**
  * Indexing data about a table available in the HTTP Archive dataset.
  */
@@ -37,6 +40,8 @@ export type HaTableInfo = {
     /** The HTTP Archive dataset ID to query. */
     readonly haDatasetId: string;
   };
-  // /** The id of the table in the extracted dataset. */
-  // readonly extractedTableId: string;
+  /** The dataset of the extracted form of this table or where that table will be created. */
+  readonly extractedDataset: Dataset;
+  /** The extracted form of this table, or `undefined` if it hasn't been queried or created yet. */
+  readonly extractedTable?: Table;
 };

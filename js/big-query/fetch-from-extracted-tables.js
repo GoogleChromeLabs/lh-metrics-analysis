@@ -23,12 +23,8 @@ const {Storage} = CSModule;
 
 import {PROJECT_ROOT} from '../module-utils.js';
 import credentials from './auth/credentials.js';
-import {
-  extractMetricsFromHaLhrs,
-  assertValidYear,
-  assertValidMonth,
-  getExtractedTableId,
-} from './extract-from-ha-tables.js';
+import {extractMetricsFromHaLhrs} from './extract-from-ha-tables.js';
+import {assertValidYear, assertValidMonth, getExtractedTableId} from './ha-tables-data.js';
 import {assertValidBigQueryId, assertValidColumnName, getUuidTableSuffix} from './bq-utils.js';
 
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
@@ -263,22 +259,16 @@ async function getMetricQueryResults(metricQuery, extractedDataset, metricValueI
 /**
  * Query a metric from the given HTTP Archive table and save locally as a
  * single-column csv file.
- * `extractedDataset` is the dataset used for tables of values extracted from
- * the HTTP Archive LHRs. Reuse `extractedDataset` wherever possible as this is
- * the expensive step.
- * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} haTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
- * @param {Dataset} extractedDataset
  * @return {Promise<{filename: string, numRows: number}>}
  */
-async function fetchSingleTableMetric(haTableInfo, metricValueId, extractedDataset) {
+async function fetchSingleTableMetric(haTableInfo, metricValueId) {
   console.warn(`Fetching '${metricValueId}' from extracted HTTP Archive run ` +
       `${getExtractedTableId(haTableInfo)}`);
 
   // Start by making sure target HTTP Archive run has been extracted.
-  const extractedTable = await extractMetricsFromHaLhrs(haTableInfo, extractedDataset);
+  const extractedTable = await extractMetricsFromHaLhrs(haTableInfo);
   const [extractedMetadata] = await extractedTable.getMetadata();
   const extractedEtag = extractedMetadata.etag;
 
@@ -296,6 +286,7 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, extractedDatas
 
   // If not, download a single column of metric data.
   const metricQuery = getSingleTableMetricQuery(haTableInfo, metricValueId);
+  const extractedDataset = haTableInfo.extractedDataset;
   const {results: metricCsv, numRows} = await getMetricQueryResults(metricQuery,
       extractedDataset, metricValueId);
 
@@ -316,19 +307,12 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, extractedDatas
  * both are required to have a non-error result for a particular URL.
  * Caching relies on the order of `base` and `compare` for simplicity, so always
  * use the same order to avoid doing extra work.
- * `extractedDataset` is the dataset used for tables of values extracted from
- * the HTTP Archive LHRs. Reuse `extractedDataset` wherever possible as this is
- * the expensive step.
- * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
- * @param {Dataset} extractedDataset
  * @return {Promise<{filename: string, numRows: number}>}
  */
-async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricValueId,
-    extractedDataset) {
+async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricValueId) {
   if (getExtractedTableId(baseTableInfo) === getExtractedTableId(compareTableInfo)) {
     throw new Error('Cannot fetch with same table as base and compare');
   }
@@ -338,8 +322,8 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
 
   // Start by making sure target HTTP Archive runs have been extracted.
   const [baseTable, compareTable] = await Promise.all([
-    extractMetricsFromHaLhrs(baseTableInfo, extractedDataset),
-    extractMetricsFromHaLhrs(compareTableInfo, extractedDataset),
+    extractMetricsFromHaLhrs(baseTableInfo),
+    extractMetricsFromHaLhrs(compareTableInfo),
   ]);
   const [baseMetadata] = await baseTable.getMetadata();
   const baseEtag = baseMetadata.etag;
@@ -361,6 +345,7 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
 
   // If not, download the metric data.
   const pairedQuery = getPairedTablesMetricQuery(baseTableInfo, compareTableInfo, metricValueId);
+  const extractedDataset = baseTableInfo.extractedDataset;
   const {results: pairedMetricCsv, numRows} = await getMetricQueryResults(pairedQuery,
       extractedDataset, metricValueId);
 
@@ -381,17 +366,11 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
  * limited to columns with a limited number of possibilities.
  * If one of the values is `null`, the returned object will have a property with
  * a key of (the stringified) `'null'` for the count of the null values.
- * `extractedDataset` is the dataset used for tables of values extracted from
- * the HTTP Archive LHRs. Reuse `extractedDataset` wherever possible as this is
- * the expensive step.
- * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} tableInfo
  * @param {'lh_version'|'runtime_error_code'|'chrome_version'|'performance_score'} columnId
- * @param {Dataset} extractedDataset
  * @return {Promise<Record<string, number>>}
  */
-async function fetchUniqueValueCounts(tableInfo, columnId, extractedDataset) {
+async function fetchUniqueValueCounts(tableInfo, columnId) {
   console.warn(`Fetching ${columnId} counts from extracted HTTP Archive run ` +
       `${getExtractedTableId(tableInfo)}`);
 
@@ -401,7 +380,7 @@ async function fetchUniqueValueCounts(tableInfo, columnId, extractedDataset) {
   assertValidBigQueryId(extractedTableId);
 
   // Start by making sure target HTTP Archive runs have been extracted.
-  await extractMetricsFromHaLhrs(tableInfo, extractedDataset);
+  await extractMetricsFromHaLhrs(tableInfo);
 
   const countQuery = `SELECT
       ${columnId},
@@ -413,7 +392,7 @@ async function fetchUniqueValueCounts(tableInfo, columnId, extractedDataset) {
     ORDER BY
       ${columnId}`;
 
-  const [rows] = await extractedDataset.query({
+  const [rows] = await tableInfo.extractedDataset.query({
     query: countQuery,
   });
 
