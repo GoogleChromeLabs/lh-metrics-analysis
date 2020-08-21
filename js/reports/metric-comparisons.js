@@ -61,6 +61,29 @@ function getMonthName({year, month}) {
 }
 
 /**
+ * Get a short written name of the table's month.
+ * @param {HaTableInfo} tableInfo
+ */
+function getShortMonthName({month}) {
+  // The `toLocaleString({month: 'short'})` names can be dumb, so do it manually.
+  const monthNames = [
+    'Jan',
+    'Feb',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'Aug',
+    'Sept',
+    'Nov',
+    'Dec',
+  ];
+
+  return monthNames[month - 1];
+}
+
+/**
  * @param {string} imageFilename
  * @param {string} altText
  * @param {number} [width]
@@ -101,8 +124,8 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, dataset, 
     filename,
     imageName,
     '--metric-name="Performance Sore"',
-    '-b', '"July 2019"',
-    '-c', '"July 2020"',
+    '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
+    '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
     '--label-multiplier=100',
     '--max-plotted-value=1',
   ];
@@ -190,6 +213,7 @@ async function getMetricValueComparison(baseTableInfo, compareTableInfo, dataset
   const metricOptions = metricDisplayOptions[metricValueId];
   const heading = `#### ${baseName} vs ${compareName} (${comparisonDescription})`;
 
+  // TODO(bckenny): print more specific message when metric known to not exist for date.
   if (numRows === 0) {
     return `${heading}
 
@@ -201,23 +225,22 @@ No results found for ${metricOptions.plotTitle} in ${baseName}/${compareName}.
   const shiftFunctionTable = getPrettyPrintedShiftData(shiftResults, {
     baseName,
     compareName,
-    units: metricOptions.unit,
+    unit: metricOptions.unit,
     digits: metricOptions.digits,
   });
 
   // eslint-disable-next-line max-len
   const imageName = `${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
 
-  // Rscript R/plot-dependent-shift-bin.R data/performance_score/paired-2019-07-to-2020-07.Io7aN%2FadjSmJ9avh19aI%2FQ%3D%3D-drFNlvOazc8XGu2iCkHA5A%3D%3D.csv paired-2019-2020.png
-  // --metric-name="Performance Sore" -b "July 2019" -c "July 2020" --label-multiplier=100 --max-plotted-value=1
+  // TODO(bckenny): print stderr from Rscript.
   const command = 'Rscript';
   const args = [
     'R/plot-dependent-shift-bin.R',
     filename,
     imageName,
     `--metric-name="${metricOptions.plotTitle}"`,
-    '-b', '"July 2019"',
-    '-c', '"July 2020"',
+    '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
+    '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
     '--reverse-diff-colors', // For metrics, positive difference means it regressed in `compare`.
     `--digits=${metricOptions.digits}`,
   ];
@@ -234,7 +257,6 @@ No results found for ${metricOptions.plotTitle} in ${baseName}/${compareName}.
 
   return `${heading}
 _results based on ${numRows.toLocaleString()} runs of the same site without error_
-
 
 ${imageTag}
 
