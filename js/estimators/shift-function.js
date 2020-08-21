@@ -95,7 +95,7 @@ function getPrettyPrintedShiftData(dataByQuantile, options = {}) {
     const ciUpper = data.ciUpper * multiplier;
     const ciString = ciToApaString(difference, ciLower, ciUpper, units, digits);
 
-    str += `| ${quantile} | ${baseStr} | **${compareStr}** | ${ciString} |\n`;
+    str += `| ${quantile} | ${baseStr}${units} | **${compareStr}${units}** | ${ciString} |\n`;
   }
 
   return str;
