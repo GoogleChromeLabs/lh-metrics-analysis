@@ -215,8 +215,10 @@ plotDecileLinks <- function(p,
   diff <- sf[[4]] # differences
 
   # create new variables ----------------------------------------
+  # Scale and round value for display. Do first to not get ±0 on a label.
+  label_values <- round(diff * label_multiplier, labres)
   # Convert sign into index into link_col
-  diff_sign <- sign(diff) + 2
+  diff_sign <- sign(label_values) + 2
   q_seq <- sf[[1]]
   qn <- length(q_seq)
   # Stair step counting from 1 up (by 1s) to midpoint, then back down to 1
@@ -275,8 +277,7 @@ plotDecileLinks <- function(p,
   # Add labels for differences between extreme deciles and median.
   if (add_lab == TRUE) {
     for (d in c(1, ceiling(qn / 2), qn)) {
-      # Round value first to not get ±0 on a label.
-      label_value <- round(diff[d] * label_multiplier, labres)
+      label_value = label_values[d]
       # Add explicit sign for display.
       if (label_value < 0) {
         label_sign <- "-"

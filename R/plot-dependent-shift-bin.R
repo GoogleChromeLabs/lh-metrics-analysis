@@ -269,6 +269,10 @@ run <- function() {
                                         like axis ticks and difference labels. Used for e.g. scaling
                                         a score from [0, 1] to [0, 100] without having to alter the
                                         actual data [default: 1]
+      --reverse-diff-colors             If set, reverses colors so a negative difference is marked
+                                        as a good change.
+      --digits=<d>                      Number of fractional decimal places to round to for display
+                                        [default: 1]
 
 
   Arguments:
@@ -301,6 +305,8 @@ run <- function() {
     scatter_y_limits <- c(0, quantile(c(data$base, data$compare), 0.99))
   }
 
+  digits <- round(as.numeric(arguments$digits))
+
   plot <- plotScatterplotWithDeciles(
     data_sampled$base,
     data_sampled$compare,
@@ -308,9 +314,9 @@ run <- function() {
     sf,
     title = metric_title,
     y_limits = scatter_y_limits,
-    labres = 1,
+    labres = digits,
     label_unit = unit,
-    reverse_link_colors = FALSE,
+    reverse_link_colors = arguments$reverse_diff_colors,
     label_multiplier = label_multiplier
   )
   print(plot)
