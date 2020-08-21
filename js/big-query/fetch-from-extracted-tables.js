@@ -286,7 +286,7 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, extractedDatas
   const filename = getSingleSaveFilename(metricValueId, haTableInfo, extractedEtag);
   if (fs.existsSync(filename)) {
     const numRows = await getCsvRowCount(filename);
-    console.warn(`  ./${filename} already saved locally. Using it!`);
+    console.warn(`  ./${path.relative(PROJECT_ROOT, filename)} already saved locally. Using it!`);
     return {
       filename,
       numRows,
@@ -351,7 +351,7 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
       compareEtag);
   if (fs.existsSync(filename)) {
     const numRows = await getCsvRowCount(filename);
-    console.warn(`  ./${filename} already saved locally. Using it!`);
+    console.warn(`  ./${path.relative(PROJECT_ROOT, filename)} already saved locally. Using it!`);
     return {
       filename,
       numRows,
