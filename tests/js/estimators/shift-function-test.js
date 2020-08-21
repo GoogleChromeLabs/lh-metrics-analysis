@@ -290,19 +290,36 @@ describe('Shift Function', () => {
   });
 
   describe('getPrettyPrintedShiftData', () => {
+    const shiftData = [
+      /* eslint-disable max-len */
+      {q: 0.1, base: 11.1111111, compare: 12.345, difference: 1.2338889, ciLower: 1.111, ciUpper: 2.222},
+      {q: 0.2, base: 22.2222222, compare: 67.891, difference: 45.6687778, ciLower: 40.0001, ciUpper: 49.9999},
+      /* eslint-enable max-len */
+    ];
+
     it('pretty prints shift function results', () => {
-      const shiftData = [
-        /* eslint-disable max-len */
-        {q: 0.1, base: 11.1111111, compare: 12.345, difference: 1.2338889, ciLower: 1.111, ciUpper: 2.222},
-        {q: 0.2, base: 22.2222222, compare: 67.891, difference: 45.6687778, ciLower: 40.0001, ciUpper: 49.9999},
-        /* eslint-enable max-len */
-      ];
       const prettyPrinted = getPrettyPrintedShiftData(shiftData);
       assert.strictEqual(prettyPrinted,
         '| deciles | base | compare | change |\n' +
         '| --- | --- | --- | --- |\n' +
         '| p10 | 11.1 | **12.3** | +1.2 _(95% CI [1.1, 2.2])_ |\n' +
         '| p20 | 22.2 | **67.9** | +45.7 _(95% CI [40, 50])_ |\n');
+    });
+
+    it('pretty prints shift function results with customization options', () => {
+      const options = {
+        baseName: 'basey',
+        compareName: 'comparey',
+        digits: 2,
+        unit: 'ms',
+        multiplier: 100,
+      };
+      const prettyPrinted = getPrettyPrintedShiftData(shiftData, options);
+      assert.strictEqual(prettyPrinted,
+        '| deciles | basey | comparey | change |\n' +
+        '| --- | --- | --- | --- |\n' +
+        '| p10 | 1,111.11ms | **1,234.5ms** | +123.39ms _(95% CI [111.1, 222.2])_ |\n' +
+        '| p20 | 2,222.22ms | **6,789.1ms** | +4,566.88ms _(95% CI [4,000.01, 4,999.99])_ |\n');
     });
   });
 });

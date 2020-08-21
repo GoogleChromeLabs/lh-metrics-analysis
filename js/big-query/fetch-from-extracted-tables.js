@@ -117,6 +117,27 @@ function getPairedSaveFilename(metricValueId, baseTableInfo, baseEtag, compareTa
 }
 
 /**
+ * Counts the number of rows in the given file, not counting the header line.
+ * Assumes file is CSV without verification.
+ * @param {string} filename
+ * @return {Promise<number>}
+ */
+async function getCsvRowCount(filename) {
+  const readStream = fs.createReadStream(filename, {encoding: 'utf-8'});
+  let count = 0;
+  for await (const chunk of readStream) {
+    for (let i = 0; i < chunk.length; i++) {
+      if (chunk.charCodeAt(i) === 10) { // '\n'
+        count++;
+      }
+    }
+  }
+
+  // Subtract 1 to not count the headers.
+  return count - 1;
+}
+
+/**
  * A query string to get a single column (with the name from `metricValueId`) of
  * results for the given metric and HTTP Archive run.
  * Query assumes it will be run in the context of an established dataset (table
@@ -189,7 +210,7 @@ function getPairedTablesMetricQuery(baseTableInfo, compareTableInfo, metricValue
  * @param {string} metricQuery
  * @param {Dataset} extractedDataset
  * @param {MetricValueId|'performance_score'} metricValueId For logging and easy table/file identification.
- * @return {Promise<Buffer>}
+ * @return {Promise<{results: Buffer, numRows: number}>}
  */
 async function getMetricQueryResults(metricQuery, extractedDataset, metricValueId) {
   console.warn('  Running query...');
@@ -226,9 +247,12 @@ async function getMetricQueryResults(metricQuery, extractedDataset, metricValueI
     await tmpTable.extract(tmpFile, {format: 'CSV'});
 
     console.warn('  Downloading query results from cloud storage...');
-    const [contents] = await tmpFile.download();
+    const [results] = await tmpFile.download();
 
-    return contents;
+    return {
+      results,
+      numRows: Number(metadata.numRows),
+    };
   } finally {
     // Clean up tmp file regardless of outcome.
     console.warn('  Cleaning up storage temp file...');
@@ -247,7 +271,7 @@ async function getMetricQueryResults(metricQuery, extractedDataset, metricValueI
  * @param {HaTableInfo} haTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
  * @param {Dataset} extractedDataset
- * @return {Promise<string>}
+ * @return {Promise<{filename: string, numRows: number}>}
  */
 async function fetchSingleTableMetric(haTableInfo, metricValueId, extractedDataset) {
   console.warn(`Fetching '${metricValueId}' from extracted HTTP Archive run ` +
@@ -261,20 +285,28 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, extractedDatas
   // If file is already downloaded for this specific etag, we're good.
   const filename = getSingleSaveFilename(metricValueId, haTableInfo, extractedEtag);
   if (fs.existsSync(filename)) {
-    console.warn(`  ./${path.relative(PROJECT_ROOT, filename)} already saved locally. Using it!`);
-    return filename;
+    const numRows = await getCsvRowCount(filename);
+    console.warn(`  ./${filename} already saved locally. Using it!`);
+    return {
+      filename,
+      numRows,
+    };
   }
   // TODO(bckenny): at some point, should probably clean up old data files with old etags.
 
   // If not, download a single column of metric data.
   const metricQuery = getSingleTableMetricQuery(haTableInfo, metricValueId);
-  const metricCsv = await getMetricQueryResults(metricQuery, extractedDataset, metricValueId);
+  const {results: metricCsv, numRows} = await getMetricQueryResults(metricQuery,
+      extractedDataset, metricValueId);
 
   // And save to disk.
   await fs.promises.mkdir(path.dirname(filename), {recursive: true});
   await fs.promises.writeFile(filename, metricCsv);
 
-  return filename;
+  return {
+    filename,
+    numRows,
+  };
 }
 
 /**
@@ -293,7 +325,7 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId, extractedDatas
  * @param {HaTableInfo} compareTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
  * @param {Dataset} extractedDataset
- * @return {Promise<string>}
+ * @return {Promise<{filename: string, numRows: number}>}
  */
 async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricValueId,
     extractedDataset) {
@@ -318,23 +350,28 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
   const filename = getPairedSaveFilename(metricValueId, baseTableInfo, baseEtag, compareTableInfo,
       compareEtag);
   if (fs.existsSync(filename)) {
-    console.warn(`  ./${path.relative(PROJECT_ROOT, filename)} already saved locally. Using it!`);
-    return filename;
+    const numRows = await getCsvRowCount(filename);
+    console.warn(`  ./${filename} already saved locally. Using it!`);
+    return {
+      filename,
+      numRows,
+    };
   }
   // TODO(bckenny): at some point, should probably clean up old data files with old etags.
 
   // If not, download the metric data.
   const pairedQuery = getPairedTablesMetricQuery(baseTableInfo, compareTableInfo, metricValueId);
-  const pairedMetricCsv = await getMetricQueryResults(pairedQuery, extractedDataset,
-      metricValueId);
-
-  // TODO(bckenny): do a zero-row result check cause something went wrong.
+  const {results: pairedMetricCsv, numRows} = await getMetricQueryResults(pairedQuery,
+      extractedDataset, metricValueId);
 
   // And save to disk.
   await fs.promises.mkdir(path.dirname(filename), {recursive: true});
   await fs.promises.writeFile(filename, pairedMetricCsv);
 
-  return filename;
+  return {
+    filename,
+    numRows,
+  };
 }
 
 /**
@@ -350,7 +387,7 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
  * By default these are extracted from the official `httparchive.lighthouse.*`
  * tables, but this can be overriden in the `HaTableInfo`.
  * @param {HaTableInfo} tableInfo
- * @param {'lh_version'|'runtime_error_code'|'chrome_version'} columnId
+ * @param {'lh_version'|'runtime_error_code'|'chrome_version'|'performance_score'} columnId
  * @param {Dataset} extractedDataset
  * @return {Promise<Record<string, number>>}
  */

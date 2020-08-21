@@ -231,11 +231,14 @@ describe('Fetching from extracted metrics tables', () => {
       });
 
       it('downloads a metric from a table', async () => {
-        savedFilename = await fetchSingleTableMetric(may2020TableInfo, metricValueId, testDataset);
+        const {filename, numRows} = await fetchSingleTableMetric(may2020TableInfo, metricValueId,
+            testDataset);
+        savedFilename = filename;
 
         assert.ok(fs.existsSync(savedFilename));
         const fileContents = fs.readFileSync(savedFilename, 'utf8');
         assert.strictEqual(fileContents, may2020FcpValues);
+        assert.strictEqual(numRows, 4);
       });
 
       // Dependent on above test being run first.
@@ -263,7 +266,9 @@ describe('Fetching from extracted metrics tables', () => {
         const {length: originalFileCount} = fs.readdirSync(path.dirname(savedFilename));
 
         // Fetch again.
-        await fetchSingleTableMetric(may2020TableInfo, metricValueId, testDataset);
+        const {filename: repeatSavedFilename, numRows: numRowsFromFile} =
+            await fetchSingleTableMetric(may2020TableInfo, metricValueId, testDataset);
+        assert.strictEqual(repeatSavedFilename, savedFilename);
         assert.ok(fs.existsSync(savedFilename));
 
         // Contents are the same.
@@ -277,6 +282,9 @@ describe('Fetching from extracted metrics tables', () => {
         // No new files have been saved alongside.
         const {length: newFileCount} = fs.readdirSync(path.dirname(savedFilename));
         assert.strictEqual(newFileCount, originalFileCount);
+
+        // numRows count (from file) remains the same.
+        assert.strictEqual(numRowsFromFile, 4);
       });
     });
 
@@ -309,12 +317,14 @@ describe('Fetching from extracted metrics tables', () => {
         july2018TableInfo = probjuly2018Info;
 
         // july2018TableInfo and aug2017TableInfo test tables have wikipedia in common.
-        savedFilename = await fetchPairedTablesMetric(aug2017TableInfo, july2018TableInfo,
-            metricValueId, testDataset);
+        const {filename, numRows} = await fetchPairedTablesMetric(aug2017TableInfo,
+            july2018TableInfo, metricValueId, testDataset);
+        savedFilename = filename;
 
         assert.ok(fs.existsSync(savedFilename));
         const fileContents = fs.readFileSync(savedFilename, 'utf8');
         assert.strictEqual(fileContents, pairedCsvValues);
+        assert.strictEqual(numRows, 1);
       });
 
       // Dependent on above test being run first.
@@ -345,8 +355,9 @@ describe('Fetching from extracted metrics tables', () => {
         const {length: originalFileCount} = fs.readdirSync(path.dirname(savedFilename));
 
         // Fetch again.
-        const repeatSavedFilename = await fetchPairedTablesMetric(aug2017TableInfo,
-            july2018TableInfo, metricValueId, testDataset);
+        const {filename: repeatSavedFilename, numRows: numRowsFromFile} =
+            // eslint-disable-next-line max-len
+            await fetchPairedTablesMetric(aug2017TableInfo, july2018TableInfo, metricValueId, testDataset);
         assert.strictEqual(repeatSavedFilename, savedFilename);
         assert.ok(fs.existsSync(savedFilename));
 
@@ -361,6 +372,9 @@ describe('Fetching from extracted metrics tables', () => {
         // No new files have been saved alongside.
         const {length: newFileCount} = fs.readdirSync(path.dirname(savedFilename));
         assert.strictEqual(newFileCount, originalFileCount);
+
+        // numRows count (from file) remains the same.
+        assert.strictEqual(numRowsFromFile, 1);
       });
     });
 

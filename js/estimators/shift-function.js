@@ -45,10 +45,10 @@ const DEFAULT_NBOOT = 200;
  * @param {number} value
  * @param {number} ciLow
  * @param {number} ciHigh
- * @param {string=} units The units to print after `value`. Defaults to no unit.
+ * @param {string=} unit The units to print after `value`. Defaults to no unit.
  * @param {number=} digits The number of digits to appear after the decimal point. Default 1.
  */
-function ciToApaString(value, ciLow, ciHigh, units = '', digits = 1) {
+function ciToApaString(value, ciLow, ciHigh, unit = '', digits = 1) {
   const valueStr = value.toLocaleString(undefined, {
     maximumFractionDigits: digits,
     // @ts-expect-error - Always show ± sign, except when zero. Option not yet in d.ts.
@@ -62,13 +62,13 @@ function ciToApaString(value, ciLow, ciHigh, units = '', digits = 1) {
   let ciHighStr = ciHigh.toLocaleString(undefined, {maximumFractionDigits: digits});
   ciHighStr = ciHighStr === '-0' ? '0' : ciHighStr;
 
-  return `${valueStr}${units} _(95% CI [${ciLowStr}, ${ciHighStr}])_`;
+  return `${valueStr}${unit} _(95% CI [${ciLowStr}, ${ciHighStr}])_`;
 }
 
 /**
  * Pretty-print the shift function data. Compatible with markdown tables.
  * @param {Array<ShiftQuantile>} dataByQuantile
- * @param {{baseName?: string, compareName?: string, digits?: number, units?: string, multiplier?: number}} [options]
+ * @param {{baseName?: string, compareName?: string, digits?: number, unit?: string, multiplier?: number}} [options]
  * @return {string}
  */
 function getPrettyPrintedShiftData(dataByQuantile, options = {}) {
@@ -76,7 +76,7 @@ function getPrettyPrintedShiftData(dataByQuantile, options = {}) {
     baseName = 'base',
     compareName = 'compare',
     digits = 1,
-    units = '',
+    unit = '',
     multiplier = 1,
   } = options;
 
@@ -93,9 +93,9 @@ function getPrettyPrintedShiftData(dataByQuantile, options = {}) {
     const difference = data.difference * multiplier;
     const ciLower = data.ciLower * multiplier;
     const ciUpper = data.ciUpper * multiplier;
-    const ciString = ciToApaString(difference, ciLower, ciUpper, units, digits);
+    const ciString = ciToApaString(difference, ciLower, ciUpper, unit, digits);
 
-    str += `| ${quantile} | ${baseStr} | **${compareStr}** | ${ciString} |\n`;
+    str += `| ${quantile} | ${baseStr}${unit} | **${compareStr}${unit}** | ${ciString} |\n`;
   }
 
   return str;
