@@ -17,7 +17,6 @@
 import {getTotalRows} from '../big-query/extract-from-ha-tables.js';
 import {fetchUniqueValueCounts} from '../big-query/fetch-from-extracted-tables.js';
 
-/** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
 /** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
 
 /**
@@ -44,11 +43,10 @@ function formatCompact(value) {
 
 /**
  * @param {HaTableInfo} tableInfo
- * @param {Dataset} dataset
  * @return {Promise<{summary: string, warning?: string}>}
  */
-async function getLighthouseVersionsSummary(tableInfo, dataset) {
-  const lhVersionCounts = await fetchUniqueValueCounts(tableInfo, 'lh_version', dataset);
+async function getLighthouseVersionsSummary(tableInfo) {
+  const lhVersionCounts = await fetchUniqueValueCounts(tableInfo, 'lh_version');
 
   const versionStrings = Object.keys(lhVersionCounts)
     .sort()
@@ -68,11 +66,10 @@ async function getLighthouseVersionsSummary(tableInfo, dataset) {
 
 /**
  * @param {HaTableInfo} tableInfo
- * @param {Dataset} dataset
  * @return {Promise<{summary: string, warning?: string}>}
  */
-async function getChromeVersionsSummary(tableInfo, dataset) {
-  const chromeVersionCounts = await fetchUniqueValueCounts(tableInfo, 'chrome_version', dataset);
+async function getChromeVersionsSummary(tableInfo) {
+  const chromeVersionCounts = await fetchUniqueValueCounts(tableInfo, 'chrome_version');
 
   const versionStrings = Object.keys(chromeVersionCounts)
     .sort()
@@ -92,12 +89,11 @@ async function getChromeVersionsSummary(tableInfo, dataset) {
 
 /**
  * @param {HaTableInfo} tableInfo
- * @param {Dataset} dataset
  * @param {number} totalRows
  * @return {Promise<{summary: string, warning?: string}>}
  */
-async function getErrorRateSummary(tableInfo, dataset, totalRows) {
-  const runtimeErrorCounts = await fetchUniqueValueCounts(tableInfo, 'runtime_error_code', dataset);
+async function getErrorRateSummary(tableInfo, totalRows) {
+  const runtimeErrorCounts = await fetchUniqueValueCounts(tableInfo, 'runtime_error_code');
 
   // Count all the entries that had a non-`'null'` error code (`null` converted to a `'null'` key).
   const {'null': _, ...allErrorCounts} = runtimeErrorCounts;
@@ -117,12 +113,11 @@ async function getErrorRateSummary(tableInfo, dataset, totalRows) {
 /**
  * TODO(bckenny): extend null perf scores back to pre 3.0.
  * @param {HaTableInfo} tableInfo
- * @param {Dataset} dataset
  * @param {number} totalRows
  * @return {Promise<{summary: string, warning?: string}>}
  */
-async function getNullPerfSummary(tableInfo, dataset, totalRows) {
-  const perfScoreCounts = await fetchUniqueValueCounts(tableInfo, 'performance_score', dataset);
+async function getNullPerfSummary(tableInfo, totalRows) {
+  const perfScoreCounts = await fetchUniqueValueCounts(tableInfo, 'performance_score');
   const nullPerfScoreCount = perfScoreCounts['null'];
   const errorPercentage = (nullPerfScoreCount / totalRows)
     .toLocaleString('en-US', {style: 'percent', maximumFractionDigits: 2});
@@ -139,11 +134,10 @@ async function getNullPerfSummary(tableInfo, dataset, totalRows) {
 /**
  * Write a summary of the given table.
  * @param {HaTableInfo|null} tableInfo
- * @param {Dataset} dataset
  * @param {string} description
  * @return {Promise<string>}
  */
-async function getSingleTableSummary(tableInfo, dataset, description) {
+async function getSingleTableSummary(tableInfo, description) {
   if (!tableInfo) {
     return `**no ${description} table found**\n`;
   }
@@ -152,12 +146,12 @@ async function getSingleTableSummary(tableInfo, dataset, description) {
   const date = new Date(year, month - 1, 1);
   const monthName = date.toLocaleString(undefined, {month: 'long'});
 
-  const totalRows = await getTotalRows(dataset.bigQuery, tableInfo);
+  const totalRows = await getTotalRows(tableInfo);
 
-  const lhVersions = await getLighthouseVersionsSummary(tableInfo, dataset);
-  const chromeVersions = await getChromeVersionsSummary(tableInfo, dataset);
-  const errorRate = await getErrorRateSummary(tableInfo, dataset, totalRows);
-  const nullPerfRate = await getNullPerfSummary(tableInfo, dataset, totalRows);
+  const lhVersions = await getLighthouseVersionsSummary(tableInfo);
+  const chromeVersions = await getChromeVersionsSummary(tableInfo);
+  const errorRate = await getErrorRateSummary(tableInfo, totalRows);
+  const nullPerfRate = await getNullPerfSummary(tableInfo, totalRows);
 
   return `**${monthName} ${year}** (${description}):
   - ${lhVersions.summary}
@@ -173,14 +167,13 @@ async function getSingleTableSummary(tableInfo, dataset, description) {
  * be compared against it. A compare table can be `null` if one doesn't exist
  * but it's still worth including in the summary (e.g. there is no
  * `2018_06_01_mobile` table but it's worth calling out its absence).
- * @param {Dataset} dataset
  * @param {{tableInfo: HaTableInfo, description: string}} baseTable
  * @param  {...{tableInfo: HaTableInfo|null, description: string}} compareTables
  * @return {Promise<string>}
  */
-async function getTableSummarySection(dataset, baseTable, ...compareTables) {
+async function getTableSummarySection(baseTable, ...compareTables) {
   const tableSummaries = await Promise.all([baseTable, ...compareTables]
-    .map(t => getSingleTableSummary(t.tableInfo, dataset, t.description)));
+    .map(t => getSingleTableSummary(t.tableInfo, t.description)));
 
   return '### Summary of queried tables\n' +
     tableSummaries.join('\n');

@@ -33,7 +33,6 @@ import {execFile} from 'child_process';
 const execFileAsync = promisify(execFile);
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
-/** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
 /** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
 /** @typedef {import('../big-query/extract-from-ha-tables.js').MetricValueId} MetricValueId */
 
@@ -97,13 +96,12 @@ function getImageTag(imageFilename, altText, width = PLOT_SIZE, height = PLOT_SI
 /**
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
- * @param {Dataset} dataset
  * @param {string} description
  * @return {Promise<string>}
  */
-async function getPerfScoreComparison(baseTableInfo, compareTableInfo, dataset, description) {
+async function getPerfScoreComparison(baseTableInfo, compareTableInfo, description) {
   const {filename, numRows} = await fetchPairedTablesMetric(baseTableInfo, compareTableInfo,
-      'performance_score', dataset);
+      'performance_score');
   const shiftResults = await getShiftFunctionDeciles(filename, {quiet: false});
 
   const baseName = `${getMonthName(baseTableInfo)} ${baseTableInfo.year}`;
@@ -198,15 +196,14 @@ const metricDisplayOptions = {
 /**
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
- * @param {Dataset} dataset
  * @param {MetricValueId} metricValueId
  * @param {string} comparisonDescription
  * @return {Promise<string>}
  */
-async function getMetricValueComparison(baseTableInfo, compareTableInfo, dataset, metricValueId,
+async function getMetricValueComparison(baseTableInfo, compareTableInfo, metricValueId,
     comparisonDescription) {
   const {filename, numRows} = await fetchPairedTablesMetric(baseTableInfo, compareTableInfo,
-      metricValueId, dataset);
+      metricValueId);
 
   const baseName = `${getMonthName(baseTableInfo)} ${baseTableInfo.year}`;
   const compareName = `${getMonthName(compareTableInfo)} ${compareTableInfo.year}`;
@@ -233,6 +230,7 @@ No results found for ${metricOptions.plotTitle} in ${baseName}/${compareName}.
   const imageName = `${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
 
   // TODO(bckenny): print stderr from Rscript.
+  // TODO(bckenny): set image size
   const command = 'Rscript';
   const args = [
     'R/plot-dependent-shift-bin.R',
@@ -278,30 +276,31 @@ async function run() {
   const bigQuery = new BigQuery(credentials);
   const extractedDataset = bigQuery.dataset('lh_extract');
 
-  const haTablesData = new HaTablesData(bigQuery);
+  const haTablesData = new HaTablesData(extractedDataset);
   const latestTable = await haTablesData.getLatestTable();
   const lastMonth = await haTablesData.getMonthBefore(latestTable);
   const lastYear = await haTablesData.getYearBefore(latestTable);
 
   writeLn(getTitle(latestTable));
 
-  const tableSummary = await getTableSummarySection(extractedDataset,
+  const tableSummary = await getTableSummarySection(
     {tableInfo: latestTable, description: 'latest'},
     {tableInfo: lastMonth, description: 'one month prior'},
-    {tableInfo: lastYear, description: 'one year prior'});
+    {tableInfo: lastYear, description: 'one year prior'}
+  );
   writeLn(tableSummary);
 
   writeLn('### Overall Performance score');
   if (lastMonth) {
     const perfScoreComparison = await getPerfScoreComparison(lastMonth, latestTable,
-        extractedDataset, 'month-over-month');
+        'month-over-month');
     writeLn(perfScoreComparison);
   } else {
     // something
   }
   if (lastYear) {
     const perfScoreComparison = await getPerfScoreComparison(lastYear, latestTable,
-        extractedDataset, 'year-over-year');
+        'year-over-year');
     writeLn(perfScoreComparison);
   } else {
     // something
@@ -323,7 +322,7 @@ async function run() {
     let monthComparisonPromise;
     if (lastMonth) {
       monthComparisonPromise = getMetricValueComparison(lastMonth, latestTable,
-          extractedDataset, metricValueId, 'month-over-month');
+          metricValueId, 'month-over-month');
     } else {
       // TODO(bckenny): something
       monthComparisonPromise = Promise.resolve('');
@@ -331,7 +330,7 @@ async function run() {
     let yearComparisonPromise;
     if (lastYear) {
       yearComparisonPromise = getMetricValueComparison(lastYear, latestTable,
-          extractedDataset, metricValueId, 'year-over-year');
+          metricValueId, 'year-over-year');
     } else {
       // TODO(bckenny): something
       yearComparisonPromise = Promise.resolve('');
