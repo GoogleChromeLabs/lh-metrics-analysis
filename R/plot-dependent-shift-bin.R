@@ -20,74 +20,10 @@
 
 # Load a plot_utils that has been modified from the one provided in rogme.
 source("third_party/rogme/R/plot_utils.R")
+source("R/utils.R")
 
 # Disable Rplots.pdf generation.
 pdf(NULL)
-
-# TODO(bckenny): can share these in a utils file.
-#' Format a number for display (thousands separator, truncated fractional part).
-#' @param num The number to format.
-formatNumber <- function(num) {
-  return(format(num, nsmall = 1, big.mark = ","))
-}
-
-# TODO(bckenny): switch to readr
-#' Load the needed two-column CSV file and do some validation that the data
-#' seems usable.
-#' @param filename The path to the CSV file.
-#' @return A data frame with numeric columns `base` and `compare`.
-loadCsvFile <- function(filename) {
-  if (!file.exists(filename)) {
-    stop(paste0("unable to find file '", filename, "'"))
-  }
-  message(paste0("loading file '", filename, "'..."))
-  data <- utils::read.csv(filename, header = TRUE, sep = ",")
-
-  # Validate data.
-  if (!identical(names(data), c("base", "compare"))) {
-    stop("Columns must be named 'base' and 'compare'")
-  }
-  if (!is.numeric(data$base) || !is.numeric(data$compare)) {
-    stop("Columns must contain only numeric values")
-  }
-  if (anyNA(data$base) || anyNA(data$compare)) {
-    stop("Columns must not have missing or NaN entries")
-  }
-  message("loaded.")
-
-  return(data)
-}
-
-#' Take the paired columns in `data` and return a subset of it (without
-#' replacement) of size `sample_size`. If the `sample_size` is larger than the
-#' number of rows in `data` (or `sample_size` is `Inf`), data is returned
-#' unchanged.
-#' @param data A data frame with numeric columns `base` and `compare`.
-#' @param sample_size The size of the sample to take from `data`.
-#' @return A data frame with numeric columns `base` and `compare` of length `min(nrow(data), sample_size)`.
-sampleDataIfNeeded <- function(data, sample_size = Inf) {
-  # Set the rand seed so results are reproducible.
-  set.seed(7)
-
-  # Sample data if requested, keeping pairs together.
-  if (is.finite(sample_size) && sample_size < length(data$base)) {
-    capped_sample_size <- min(sample_size, length(data$base))
-    data_sampled <- data[sample(nrow(data), capped_sample_size), ]
-
-    message(paste(
-      "using",
-      formatNumber(length(data_sampled$base)),
-      "out of",
-      formatNumber(length(data$base)),
-      "pairs"
-    ))
-  } else {
-    message(paste("using full", formatNumber(length(data$base)), "pairs"))
-    data_sampled <- data
-  }
-
-  return(data_sampled)
-}
 
 #' Get the shiftdhd result for the given file using the `shift-function.js`
 #' utility.
@@ -273,6 +209,7 @@ run <- function() {
                                         as a good change.
       --digits=<d>                      Number of fractional decimal places to round to for display
                                         [default: 1]
+      --image-size=<size>               Image width and height, in pixels [default: 1200]
 
 
   Arguments:
@@ -282,7 +219,7 @@ run <- function() {
   arguments <- docopt::docopt(doc)
 
   sample_size <- round(as.numeric(arguments$sample_size))
-  data <- loadCsvFile(arguments$input)
+  data <- loadBaseCompareCsvFile(arguments$input)
   data_sampled <- sampleDataIfNeeded(data, sample_size)
 
   sf <- shiftdhd(arguments$input)
@@ -307,6 +244,9 @@ run <- function() {
 
   digits <- round(as.numeric(arguments$digits))
 
+  dpi <- 150
+  image_size <- round(as.numeric(arguments$image_size) / dpi)
+
   plot <- plotScatterplotWithDeciles(
     data_sampled$base,
     data_sampled$compare,
@@ -320,7 +260,13 @@ run <- function() {
     label_multiplier = label_multiplier
   )
   print(plot)
-  ggplot2::ggsave(filename = arguments$output, dpi = "retina")
+  ggplot2::ggsave(
+    filename = arguments$output,
+    units = "in",
+    dpi = dpi,
+    width = image_size,
+    height = image_size
+  )
 }
 
 run()
