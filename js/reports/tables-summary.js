@@ -101,7 +101,7 @@ async function getErrorRateSummary(tableInfo, totalRows) {
   const errorPercentage = (totalErrors / totalRows)
     .toLocaleString('en-US', {style: 'percent', maximumFractionDigits: 2});
 
-  const summary = `${errorPercentage} error rate ` +
+  const summary = `**${errorPercentage} error rate** ` +
       `(${formatCompact(totalErrors)} runs with a \`runtimeError\`)`;
 
   // TODO(bckenny): warning when unusual level of errors. Hard code threshold?
@@ -155,7 +155,7 @@ async function getSingleTableSummary(tableInfo, description) {
 
   return `**${monthName} ${year}** (${description}):
   - ${lhVersions.summary}
-  - ${formatCompact(totalRows)} total Lighthouse runs
+  - **${formatCompact(totalRows)}** total Lighthouse runs
   - ${errorRate.summary}
   - ${nullPerfRate.summary}
   - ${chromeVersions.summary}
@@ -175,7 +175,7 @@ async function getTableSummarySection(baseTable, ...compareTables) {
   const tableSummaries = await Promise.all([baseTable, ...compareTables]
     .map(t => getSingleTableSummary(t.tableInfo, t.description)));
 
-  return '### Summary of queried tables\n' +
+  return '## Summary of queried tables\n' +
     tableSummaries.join('\n');
 }
 

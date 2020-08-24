@@ -131,14 +131,16 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, descripti
 
   const imageTag = getImageTag(imageName, `${baseName} vs ${compareName} Performance Score`);
 
+  /* eslint-disable max-len */
   return `
-#### ${baseName} vs ${compareName} (${description})
-_results based on ${numRows.toLocaleString()} runs of the same site without error_
+### ${baseName} vs ${compareName} (${description})
+_results based on ${numRows.toLocaleString()} pairs of before/after runs of the same sites without error_
 
 ${imageTag}
 
 
 ${shiftFunctionTable}`;
+  /* eslint-enable max-len */
 }
 
 /** @type {Record<MetricValueId, {sectionTitle: string, plotTitle: string, unit: string, digits: number}>} */
@@ -208,13 +210,13 @@ async function getMetricValueComparison(baseTableInfo, compareTableInfo, metricV
   const baseName = `${getMonthName(baseTableInfo)} ${baseTableInfo.year}`;
   const compareName = `${getMonthName(compareTableInfo)} ${compareTableInfo.year}`;
   const metricOptions = metricDisplayOptions[metricValueId];
-  const heading = `#### ${baseName} vs ${compareName} (${comparisonDescription})`;
+  const heading = `### ${baseName} vs ${compareName} (${comparisonDescription})`;
 
-  // TODO(bckenny): print more specific message when metric known to not exist for date.
+  // TODO(bckenny): currently hacked in, but add limits for when metric known to not exist for date.
   if (numRows === 0) {
     return `${heading}
 
-No results found for ${metricOptions.plotTitle} in ${baseName}/${compareName}.
+${metricOptions.plotTitle} data was not collected in ${baseName}.
 `;
   }
 
@@ -253,13 +255,15 @@ No results found for ${metricOptions.plotTitle} in ${baseName}/${compareName}.
   const imageTag = getImageTag(imageName,
       `${baseName} vs ${compareName} ${metricOptions.plotTitle} value`);
 
+  /* eslint-disable max-len */
   return `${heading}
-_results based on ${numRows.toLocaleString()} runs of the same site without error_
+_results based on ${numRows.toLocaleString()} pairs of before/after runs of the same sites without error_
 
 ${imageTag}
 
 
 ${shiftFunctionTable}`;
+  /* eslint-enable max-len */
 }
 
 /**
@@ -269,7 +273,7 @@ ${shiftFunctionTable}`;
 function getTitle({year, month}) {
   const date = new Date(year, month - 1, 1);
   const monthName = date.toLocaleString(undefined, {month: 'long'});
-  return `## Analysis of Lighthouse results in the HTTP Archive, ${monthName} ${year} `;
+  return `# Analysis of HTTP Archive Lighthouse results, ${monthName} ${year} `;
 }
 
 async function run() {
@@ -290,7 +294,7 @@ async function run() {
   );
   writeLn(tableSummary);
 
-  writeLn('### Overall Performance score');
+  writeLn('## Overall Performance score');
   if (lastMonth) {
     const perfScoreComparison = await getPerfScoreComparison(lastMonth, latestTable,
         'month-over-month');
@@ -317,7 +321,7 @@ async function run() {
   ];
 
   for (const metricValueId of metricsOfInterest) {
-    writeLn(`### ${metricDisplayOptions[metricValueId].sectionTitle}`);
+    writeLn(`## ${metricDisplayOptions[metricValueId].sectionTitle}`);
 
     let monthComparisonPromise;
     if (lastMonth) {
@@ -348,7 +352,6 @@ async function run() {
   output.end();
   await promisify(stream.finished)(output);
 }
-
 
 // until we have `--unhandled-rejections=strict` by default.
 process.on('unhandledRejection', err => {
