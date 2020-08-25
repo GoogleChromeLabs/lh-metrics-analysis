@@ -199,8 +199,8 @@ run <- function() {
       -c=<name>, --compare-name=<name>  Axis label for the compare data [default: Group 2]
       --metric-name=<name>              Metric name for plot label [default: unknown]
       --unit=<unit>                     Optional units for display in plot label
-      --max-plotted-value=<value>       Set the max value to be plotted. Outliers beyond this will
-                                        not appear on the plot. Defaults to the 99th percentile
+      --include-percentage=<value>      Include this percentile. Outliers beyond this will not
+                                        appear on the plot [default: 99]
       --label-multiplier=<multiplier>   A multiplier that scales the labeled numbers on the plot,
                                         like axis ticks and difference labels. Used for e.g. scaling
                                         a score from [0, 1] to [0, 100] without having to alter the
@@ -235,9 +235,9 @@ run <- function() {
 
   # TODO(bckenny): pick a better way of doing this
   # Keep the far outliers out of the scatterplot.
-  if (!is.null(arguments$max_plotted_value)) {
-    max_y <- as.numeric(arguments$max_plotted_value)
-    scatter_y_limits <- c(0, max_y)
+  if (!is.null(arguments$include_percentage)) {
+    include_percentage <- as.numeric(arguments$include_percentage) / 100
+    scatter_y_limits <- c(0, quantile(c(data$base, data$compare), include_percentage))
   } else {
     scatter_y_limits <- c(0, quantile(c(data$base, data$compare), 0.99))
   }

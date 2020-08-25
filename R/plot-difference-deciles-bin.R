@@ -152,8 +152,9 @@ run <- function() {
                                         like axis ticks. Used for e.g. scaling a score from [0, 1]
                                         to [0, 100] without having to alter the actual data
                                         [default: 1]
-      --clip-percentile=<value>         Clip this percentile off both ends of the difference plot to
-                                        not be dominated by long tails [default: 7]
+      --include-percentage=<value>      Include this percentile, trimming at either end of
+                                        distribution so the difference plot isn't dominated by long
+                                        tails [default: 86]
       --image-size=<size>               Image width and height, in pixels [default: 1200]
 
 
@@ -192,9 +193,9 @@ run <- function() {
   label_multiplier <- round(as.numeric(arguments$label_multiplier))
 
   # TODO(bckenny): pick a better way of doing this
-  # TODO(bckenny): should it be percentile included instead?
+  # TODO(bckenny): validate range of include_percentage
   # Clip to not emphasize long tails.
-  y_cutoff <- as.numeric(arguments$clip_percentile) / 100
+  y_cutoff <- (100 - as.numeric(arguments$include_percentage)) / 100 / 2
   scatter_y_limits <- c(quantile(differences, y_cutoff), quantile(differences, 1 - y_cutoff))
 
   dpi <- 150
