@@ -114,27 +114,44 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, descripti
   });
 
   // eslint-disable-next-line max-len
-  const imageName = `${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-performance-score.png`;
+  const shiftImageName = `shift-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-performance-score.png`;
 
   const command = 'Rscript';
-  const args = [
+  const shiftArgs = [
     'R/plot-dependent-shift-bin.R',
     filename,
-    imageName,
-    '--metric-name="Performance Sore"',
+    shiftImageName,
+    '--metric-name="Performance Score"',
     '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
     '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
     '--label-multiplier=100',
     '--max-plotted-value=1',
   ];
-  await execFileAsync(command, args);
+  await execFileAsync(command, shiftArgs);
 
-  const imageTag = getImageTag(imageName, `${baseName} vs ${compareName} Performance Score`);
+  const shiftImageTag = getImageTag(shiftImageName,
+      `${baseName} vs ${compareName} Performance Score`);
 
   const quantileResults = await getQuantileDeciles(filename, {quiet: false});
   const quantileTable = getPrettyPrintedQuatileData(quantileResults, {
     multiplier: 100, // Scale score from [0, 1] to [0, 100].
   });
+
+  // eslint-disable-next-line max-len
+  const quantilesImageName = `diff-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-performance-score.png`;
+  const quantileArgs = [
+    'R/plot-difference-deciles-bin.R',
+    filename,
+    quantilesImageName,
+    '--metric-name="Performance"',
+    '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
+    '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
+    '--label-multiplier=100',
+    '--clip-percentile=1',
+  ];
+  await execFileAsync(command, quantileArgs);
+  const quantilesImageTag = getImageTag(quantilesImageName,
+      `${baseName} and ${compareName} Performance Score difference`);
 
   /* eslint-disable max-len */
   return `
@@ -143,11 +160,13 @@ _results based on ${numRows.toLocaleString()} pairs of before/after runs of the 
 
 ##### Shifts in the overall performance distribution
 
-${imageTag}
+${shiftImageTag}
 
 ${shiftFunctionTable}
 
 ##### Distribution of performance changes seen by individual sites
+
+${quantilesImageTag}
 
 ${quantileTable}`;
   /* eslint-enable max-len */
@@ -239,15 +258,14 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
   });
 
   // eslint-disable-next-line max-len
-  const imageName = `${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
+  const shiftImageName = `shift-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
 
   // TODO(bckenny): print stderr from Rscript.
-  // TODO(bckenny): set image size
   const command = 'Rscript';
-  const args = [
+  const shiftArgs = [
     'R/plot-dependent-shift-bin.R',
     filename,
-    imageName,
+    shiftImageName,
     `--metric-name="${metricOptions.plotTitle}"`,
     '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
     '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
@@ -257,12 +275,12 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
   // r/docopt doesn't handle an empty string value, for some reason,
   // so only add unit if there is one.
   if (metricOptions.unit) {
-    args.push(`--unit="${metricOptions.unit}"`);
+    shiftArgs.push(`--unit="${metricOptions.unit}"`);
   }
 
-  await execFileAsync(command, args);
+  await execFileAsync(command, shiftArgs);
 
-  const imageTag = getImageTag(imageName,
+  const shiftImageTag = getImageTag(shiftImageName,
       `${baseName} vs ${compareName} ${metricOptions.plotTitle} value`);
 
   const quantileResults = await getQuantileDeciles(filename, {quiet: false});
@@ -271,17 +289,38 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
     digits: metricOptions.digits,
   });
 
+  // eslint-disable-next-line max-len
+  const quantilesImageName = `diff-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
+  const quantileArgs = [
+    'R/plot-difference-deciles-bin.R',
+    filename,
+    quantilesImageName,
+    `--metric-name="${metricOptions.plotTitle}"`,
+    '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
+    '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
+  ];
+  // r/docopt doesn't handle an empty string value, for some reason,
+  // so only add unit if there is one.
+  if (metricOptions.unit) {
+    quantileArgs.push(`--unit="${metricOptions.unit}"`);
+  }
+  await execFileAsync(command, quantileArgs);
+  const quantilesImageTag = getImageTag(quantilesImageName,
+    `${baseName} vs ${compareName} ${metricOptions.plotTitle} value`);
+
   /* eslint-disable max-len */
   return `${heading}
 _results based on ${numRows.toLocaleString()} pairs of before/after runs of the same sites without error_
 
 ##### Shifts in the overall ${metricOptions.plotTitle} distribution
 
-${imageTag}
+${shiftImageTag}
 
 ${shiftFunctionTable}
 
 ##### Distribution of ${metricOptions.plotTitle} changes seen by individual sites
+
+${quantilesImageTag}
 
 ${quantileTable}`;
   /* eslint-enable max-len */
