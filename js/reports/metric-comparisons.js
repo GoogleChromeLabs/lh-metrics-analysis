@@ -28,6 +28,7 @@ import {PROJECT_ROOT} from '../module-utils.js';
 import {getTableSummarySection} from './tables-summary.js';
 import {fetchPairedTablesMetric} from '../big-query/fetch-from-extracted-tables.js';
 import {getShiftFunctionDeciles, getPrettyPrintedShiftData} from '../estimators/shift-function.js';
+import {getQuantileDeciles, getPrettyPrintedQuatileData} from '../estimators/quantiles-pbci.js';
 
 import {execFile} from 'child_process';
 const execFileAsync = promisify(execFile);
@@ -102,11 +103,10 @@ function getImageTag(imageFilename, altText, width = PLOT_SIZE, height = PLOT_SI
 async function getPerfScoreComparison(baseTableInfo, compareTableInfo, description) {
   const {filename, numRows} = await fetchPairedTablesMetric(baseTableInfo, compareTableInfo,
       'performance_score');
-  const shiftResults = await getShiftFunctionDeciles(filename, {quiet: false});
-
   const baseName = `${getMonthName(baseTableInfo)} ${baseTableInfo.year}`;
   const compareName = `${getMonthName(compareTableInfo)} ${compareTableInfo.year}`;
 
+  const shiftResults = await getShiftFunctionDeciles(filename, {quiet: false});
   const shiftFunctionTable = getPrettyPrintedShiftData(shiftResults, {
     baseName,
     compareName,
@@ -131,15 +131,25 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, descripti
 
   const imageTag = getImageTag(imageName, `${baseName} vs ${compareName} Performance Score`);
 
+  const quantileResults = await getQuantileDeciles(filename, {quiet: false});
+  const quantileTable = getPrettyPrintedQuatileData(quantileResults, {
+    multiplier: 100, // Scale score from [0, 1] to [0, 100].
+  });
+
   /* eslint-disable max-len */
   return `
 ### ${baseName} vs ${compareName} (${description})
 _results based on ${numRows.toLocaleString()} pairs of before/after runs of the same sites without error_
 
+##### Shifts in the overall performance distribution
+
 ${imageTag}
 
+${shiftFunctionTable}
 
-${shiftFunctionTable}`;
+##### Distribution of performance changes seen by individual sites
+
+${quantileTable}`;
   /* eslint-enable max-len */
 }
 
@@ -255,14 +265,25 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
   const imageTag = getImageTag(imageName,
       `${baseName} vs ${compareName} ${metricOptions.plotTitle} value`);
 
+  const quantileResults = await getQuantileDeciles(filename, {quiet: false});
+  const quantileTable = getPrettyPrintedQuatileData(quantileResults, {
+    unit: metricOptions.unit,
+    digits: metricOptions.digits,
+  });
+
   /* eslint-disable max-len */
   return `${heading}
 _results based on ${numRows.toLocaleString()} pairs of before/after runs of the same sites without error_
 
+##### Shifts in the overall ${metricOptions.plotTitle} distribution
+
 ${imageTag}
 
+${shiftFunctionTable}
 
-${shiftFunctionTable}`;
+##### Distribution of ${metricOptions.plotTitle} changes seen by individual sites
+
+${quantileTable}`;
   /* eslint-enable max-len */
 }
 
@@ -284,6 +305,11 @@ async function run() {
   const latestTable = await haTablesData.getLatestTable();
   const lastMonth = await haTablesData.getMonthBefore(latestTable);
   const lastYear = await haTablesData.getYearBefore(latestTable);
+
+  // TODO(bckenny): temp block from new expensive run if new data comes out.
+  if (latestTable.month !== 7) {
+    throw new Error('Is august out yet?');
+  }
 
   writeLn(getTitle(latestTable));
 
