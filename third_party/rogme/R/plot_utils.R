@@ -103,7 +103,6 @@ plotDecileBars <- function(p,
                            md_size = 1,
                            alpha = 1,
                            add_lab = FALSE) {
-  deciles <- q[[2]]
   q_seq <- q[[1]]
   qn <- length(q_seq)
   size_seq <- c(
@@ -112,8 +111,8 @@ plotDecileBars <- function(p,
     rep(q_size, floor(qn / 2))
   )
 
+  deciles <- q[[2]]
   for (d in 1:qn) {
-    # group 1 (on top)
     p <- p + ggplot2::annotate("segment",
       x = 1 - q_width / 2,
       xend = 1 + q_width / 2,

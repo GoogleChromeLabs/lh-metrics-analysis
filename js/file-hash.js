@@ -44,6 +44,7 @@ function getAppendStream(addendum) {
   return appendStream;
 }
 
+// TODO(bckenny): add a getShortHash for better filenames?
 /**
  * Returns the md5 hash of the file at the given path.
  * Allows an optional extra string `addendum` to be included in the hash, the

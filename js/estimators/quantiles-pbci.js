@@ -304,7 +304,7 @@ async function getQuantileDeciles(inputPath,
   if (fs.existsSync(cachePath)) {
     if (!quiet) {
       /* c8 ignore next 3 */
-      const relativePath = path.resolve(PROJECT_ROOT, cachePath);
+      const relativePath = path.relative(PROJECT_ROOT, cachePath);
       console.warn(`Cached quantile-pbci results exist at '${relativePath}'. Using...`);
     }
     const csvText = await fs.promises.readFile(cachePath, 'utf-8');
@@ -317,7 +317,7 @@ async function getQuantileDeciles(inputPath,
   const quantilesAsCsv = getCsvPrintedQuantileData(quantileResults);
   if (!quiet) {
     /* c8 ignore next 3 */
-    const relativePath = path.resolve(PROJECT_ROOT, cachePath);
+    const relativePath = path.relative(PROJECT_ROOT, cachePath);
     console.warn(`Caching quantile-pbci results at '${relativePath}'...`);
   }
   await fs.promises.writeFile(cachePath, quantilesAsCsv);
