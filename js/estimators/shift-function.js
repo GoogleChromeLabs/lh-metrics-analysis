@@ -309,7 +309,7 @@ async function getShiftFunctionDeciles(inputPath,
   if (fs.existsSync(cachePath)) {
     if (!quiet) {
       /* c8 ignore next 3 */
-      const relativePath = path.resolve(PROJECT_ROOT, cachePath);
+      const relativePath = path.relative(PROJECT_ROOT, cachePath);
       console.warn(`Cached shift-function results exist at '${relativePath}'. Using...`);
     }
     const csvText = await fs.promises.readFile(cachePath, 'utf-8');
@@ -322,8 +322,8 @@ async function getShiftFunctionDeciles(inputPath,
   const shiftAsCsv = getCsvPrintedShiftData(shiftResult);
   if (!quiet) {
     /* c8 ignore next 3 */
-    const relativePath = path.resolve(PROJECT_ROOT, cachePath);
-    console.warn(`Caching shift-function results at './${relativePath}'...`);
+    const relativePath = path.relative(PROJECT_ROOT, cachePath);
+    console.warn(`Caching shift-function results at '${relativePath}'...`);
   }
   await fs.promises.writeFile(cachePath, shiftAsCsv);
 
