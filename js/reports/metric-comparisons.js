@@ -15,6 +15,7 @@
  */
 
 import fs from 'fs';
+import path from 'path';
 import stream from 'stream';
 import {promisify} from 'util';
 
@@ -37,19 +38,7 @@ const execFileAsync = promisify(execFile);
 /** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
 /** @typedef {import('../big-query/extract-from-ha-tables.js').MetricValueId} MetricValueId */
 
-const outfile = PROJECT_ROOT + '/report.md';
-const output = fs.createWriteStream(outfile);
-
 const PLOT_SIZE = 600;
-
-/**
- * Print string to the output stream.
- * @param {string} txt
- */
-function writeLn(txt) {
-  output.write(txt);
-  output.write('\n');
-}
 
 /**
  * Get the written name of the table's month.
@@ -85,22 +74,25 @@ function getShortMonthName({month}) {
 
 /**
  * @param {string} imageFilename
+ * @param {string} outPath
  * @param {string} altText
  * @param {number} [width]
  * @param {number} [height]
  * @return {string}
  */
-function getImageTag(imageFilename, altText, width = PLOT_SIZE, height = PLOT_SIZE) {
-  return `<img src="${imageFilename}" alt="${altText}" width="${width}" height="${height}">`;
+function getImageTag(imageFilename, outPath, altText, width = PLOT_SIZE, height = PLOT_SIZE) {
+  const src = path.relative(outPath, imageFilename);
+  return `<img src="${src}" alt="${altText}" width="${width}" height="${height}">`;
 }
 
 /**
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
+ * @param {string} outPath
  * @param {string} description
  * @return {Promise<string>}
  */
-async function getPerfScoreComparison(baseTableInfo, compareTableInfo, description) {
+async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, description) {
   const {filename, numRows} = await fetchPairedTablesMetric(baseTableInfo, compareTableInfo,
       'performance_score');
   const baseName = `${getMonthName(baseTableInfo)} ${baseTableInfo.year}`;
@@ -113,8 +105,9 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, descripti
     multiplier: 100, // Scale score from [0, 1] to [0, 100].
   });
 
-  // eslint-disable-next-line max-len
-  const shiftImageName = `shift-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-performance-score.png`;
+  const shiftImageName = `${outPath}/` +
+      // eslint-disable-next-line max-len
+      `shift-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-performance-score.png`;
 
   const command = 'Rscript';
   const shiftArgs = [
@@ -129,7 +122,7 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, descripti
   ];
   await execFileAsync(command, shiftArgs);
 
-  const shiftImageTag = getImageTag(shiftImageName,
+  const shiftImageTag = getImageTag(shiftImageName, outPath,
       `${baseName} vs ${compareName} Performance Score`);
 
   const quantileResults = await getQuantileDeciles(filename, {quiet: false});
@@ -137,8 +130,9 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, descripti
     multiplier: 100, // Scale score from [0, 1] to [0, 100].
   });
 
-  // eslint-disable-next-line max-len
-  const quantilesImageName = `diff-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-performance-score.png`;
+  const quantilesImageName = `${outPath}/` +
+      // eslint-disable-next-line max-len
+      `diff-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-performance-score.png`;
   const quantileArgs = [
     'R/plot-difference-deciles-bin.R',
     filename,
@@ -150,7 +144,7 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, descripti
     '--clip-percentile=1',
   ];
   await execFileAsync(command, quantileArgs);
-  const quantilesImageTag = getImageTag(quantilesImageName,
+  const quantilesImageTag = getImageTag(quantilesImageName, outPath,
       `${baseName} and ${compareName} Performance Score difference`);
 
   /* eslint-disable max-len */
@@ -228,10 +222,11 @@ const metricDisplayOptions = {
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
  * @param {MetricValueId} metricValueId
+ * @param {string} outPath
  * @param {string} comparisonDescription
  * @return {Promise<string>}
  */
-async function getMetricValueComparison(baseTableInfo, compareTableInfo, metricValueId,
+async function getMetricValueComparison(baseTableInfo, compareTableInfo, metricValueId, outPath,
     comparisonDescription) {
   const {filename, numRows} = await fetchPairedTablesMetric(baseTableInfo, compareTableInfo,
       metricValueId);
@@ -257,8 +252,9 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
     digits: metricOptions.digits,
   });
 
-  // eslint-disable-next-line max-len
-  const shiftImageName = `shift-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
+  const shiftImageName = `${outPath}/` +
+      // eslint-disable-next-line max-len
+      `shift-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
 
   // TODO(bckenny): print stderr from Rscript.
   const command = 'Rscript';
@@ -280,7 +276,7 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
 
   await execFileAsync(command, shiftArgs);
 
-  const shiftImageTag = getImageTag(shiftImageName,
+  const shiftImageTag = getImageTag(shiftImageName, outPath,
       `${baseName} vs ${compareName} ${metricOptions.plotTitle} value`);
 
   const quantileResults = await getQuantileDeciles(filename, {quiet: false});
@@ -289,8 +285,9 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
     digits: metricOptions.digits,
   });
 
-  // eslint-disable-next-line max-len
-  const quantilesImageName = `diff-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
+  const quantilesImageName = `${outPath}/` +
+      // eslint-disable-next-line max-len
+      `diff-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
   const quantileArgs = [
     'R/plot-difference-deciles-bin.R',
     filename,
@@ -305,7 +302,7 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
     quantileArgs.push(`--unit="${metricOptions.unit}"`);
   }
   await execFileAsync(command, quantileArgs);
-  const quantilesImageTag = getImageTag(quantilesImageName,
+  const quantilesImageTag = getImageTag(quantilesImageName, outPath,
     `${baseName} vs ${compareName} ${metricOptions.plotTitle} value`);
 
   /* eslint-disable max-len */
@@ -350,6 +347,23 @@ async function run() {
     throw new Error('Is august out yet?');
   }
 
+  const paddedMonth = String(latestTable.month).padStart(2, '0');
+  const outDirname = `${PROJECT_ROOT}/reports/metrics/${latestTable.year}-${paddedMonth}`;
+  fs.mkdirSync(outDirname, {recursive: true});
+
+  // For now, we're just overwriting everything in the directory.
+  const outfile = `${outDirname}/report.md`;
+  const output = fs.createWriteStream(outfile);
+
+  /**
+   * Print string to the output stream.
+   * @param {string} txt
+   */
+  function writeLn(txt) {
+    output.write(txt);
+    output.write('\n');
+  }
+
   writeLn(getTitle(latestTable));
 
   const tableSummary = await getTableSummarySection(
@@ -361,14 +375,14 @@ async function run() {
 
   writeLn('## Overall Performance score');
   if (lastMonth) {
-    const perfScoreComparison = await getPerfScoreComparison(lastMonth, latestTable,
+    const perfScoreComparison = await getPerfScoreComparison(lastMonth, latestTable, outDirname,
         'month-over-month');
     writeLn(perfScoreComparison);
   } else {
     // something
   }
   if (lastYear) {
-    const perfScoreComparison = await getPerfScoreComparison(lastYear, latestTable,
+    const perfScoreComparison = await getPerfScoreComparison(lastYear, latestTable, outDirname,
         'year-over-year');
     writeLn(perfScoreComparison);
   } else {
@@ -391,7 +405,7 @@ async function run() {
     let monthComparisonPromise;
     if (lastMonth) {
       monthComparisonPromise = getMetricValueComparison(lastMonth, latestTable,
-          metricValueId, 'month-over-month');
+          metricValueId, outDirname, 'month-over-month');
     } else {
       // TODO(bckenny): something
       monthComparisonPromise = Promise.resolve('');
@@ -399,7 +413,7 @@ async function run() {
     let yearComparisonPromise;
     if (lastYear) {
       yearComparisonPromise = getMetricValueComparison(lastYear, latestTable,
-          metricValueId, 'year-over-year');
+          metricValueId, outDirname, 'year-over-year');
     } else {
       // TODO(bckenny): something
       yearComparisonPromise = Promise.resolve('');
