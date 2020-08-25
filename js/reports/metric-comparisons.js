@@ -107,7 +107,7 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, 
 
   const shiftImageName = `${outPath}/` +
       // eslint-disable-next-line max-len
-      `shift-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-performance-score.png`;
+      `shift-performance-score-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}.png`;
 
   const command = 'Rscript';
   const shiftArgs = [
@@ -118,7 +118,7 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, 
     '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
     '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
     '--label-multiplier=100',
-    '--max-plotted-value=1',
+    '--include-percentage=100',
   ];
   await execFileAsync(command, shiftArgs);
 
@@ -132,7 +132,7 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, 
 
   const quantilesImageName = `${outPath}/` +
       // eslint-disable-next-line max-len
-      `diff-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-performance-score.png`;
+      `diff-performance-score-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}.png`;
   const quantileArgs = [
     'R/plot-difference-deciles-bin.R',
     filename,
@@ -141,7 +141,7 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, 
     '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
     '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
     '--label-multiplier=100',
-    '--clip-percentile=1',
+    '--include-percentage=99',
   ];
   await execFileAsync(command, quantileArgs);
   const quantilesImageTag = getImageTag(quantilesImageName, outPath,
@@ -166,7 +166,7 @@ ${quantileTable}`;
   /* eslint-enable max-len */
 }
 
-/** @type {Record<MetricValueId, {sectionTitle: string, plotTitle: string, unit: string, digits: number}>} */
+/** @type {Record<MetricValueId, {sectionTitle: string, plotTitle: string, unit: string, digits: number, includePercentage?: number}>} */
 const metricDisplayOptions = {
   fcp_value: {
     sectionTitle: 'First Contentful Paint',
@@ -215,6 +215,7 @@ const metricDisplayOptions = {
     plotTitle: 'CLS',
     unit: '',
     digits: 3,
+    includePercentage: 82,
   },
 };
 
@@ -254,7 +255,7 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
 
   const shiftImageName = `${outPath}/` +
       // eslint-disable-next-line max-len
-      `shift-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
+      `shift-${metricValueId}-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}.png`;
 
   // TODO(bckenny): print stderr from Rscript.
   const command = 'Rscript';
@@ -273,6 +274,9 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
   if (metricOptions.unit) {
     shiftArgs.push(`--unit="${metricOptions.unit}"`);
   }
+  if (metricOptions.includePercentage) {
+    shiftArgs.push(`--include-percentage=${metricOptions.includePercentage}`);
+  }
 
   await execFileAsync(command, shiftArgs);
 
@@ -287,7 +291,7 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
 
   const quantilesImageName = `${outPath}/` +
       // eslint-disable-next-line max-len
-      `diff-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}-${metricValueId}.png`;
+      `diff-${metricValueId}-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}.png`;
   const quantileArgs = [
     'R/plot-difference-deciles-bin.R',
     filename,
@@ -300,6 +304,9 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
   // so only add unit if there is one.
   if (metricOptions.unit) {
     quantileArgs.push(`--unit="${metricOptions.unit}"`);
+  }
+  if (metricOptions.includePercentage) {
+    quantileArgs.push(`--include-percentage=${metricOptions.includePercentage}`);
   }
   await execFileAsync(command, quantileArgs);
   const quantilesImageTag = getImageTag(quantilesImageName, outPath,
