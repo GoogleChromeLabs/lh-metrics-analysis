@@ -31,7 +31,7 @@ import {fetchPairedTablesMetric} from '../big-query/fetch-from-extracted-tables.
 import {getShiftFunctionDeciles, getPrettyPrintedShiftData} from '../estimators/shift-function.js';
 import {getQuantileDeciles, getPrettyPrintedQuatileData} from '../estimators/quantiles-pbci.js';
 
-import {execFile} from 'child_process';
+import {execFile, spawn} from 'child_process';
 const execFileAsync = promisify(execFile);
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
@@ -86,6 +86,54 @@ function getImageTag(imageFilename, outPath, altText, width = PLOT_SIZE, height 
 }
 
 /**
+ * From https://2ality.com/2018/05/child-process-streams.html#waiting-for-a-child-process-to-exit-via-a-promise
+ * @param {import('child_process').ChildProcess} childProcess
+ * @return {Promise<void>}
+ */
+function onExit(childProcess) {
+  return new Promise((resolve, reject) => {
+    childProcess.once('exit', code => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Exit with error code: ${code}`));
+      }
+    });
+    childProcess.once('error', reject);
+  });
+}
+
+/**
+ * @param {string} csvFilename
+ */
+async function prerunShiftFunction(csvFilename) {
+  const command = 'node';
+  const args = [
+    'js/estimators/shift-function.js',
+    '-i', csvFilename,
+  ];
+
+  console.warn('pre-running shift function');
+  const childProcess = spawn(command, args, {stdio: 'inherit'});
+  return onExit(childProcess);
+}
+
+/**
+ * @param {string} csvFilename
+ */
+async function prerunQuantiles(csvFilename) {
+  const command = 'node';
+  const args = [
+    'js/estimators/quantiles-pbci.js',
+    '-i', csvFilename,
+  ];
+
+  console.warn('pre-running quantiles');
+  const childProcess = spawn(command, args, {stdio: 'inherit'});
+  return onExit(childProcess);
+}
+
+/**
  * @param {HaTableInfo} baseTableInfo
  * @param {HaTableInfo} compareTableInfo
  * @param {string} outPath
@@ -97,6 +145,12 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, 
       'performance_score');
   const baseName = `${getMonthName(baseTableInfo)} ${baseTableInfo.year}`;
   const compareName = `${getMonthName(compareTableInfo)} ${compareTableInfo.year}`;
+
+  // TODO(bckenny): pre-run to get them in parallel (functions below will access the cache).
+  await Promise.all([
+    prerunShiftFunction(filename),
+    prerunQuantiles(filename),
+  ]);
 
   const shiftResults = await getShiftFunctionDeciles(filename, {quiet: false});
   const shiftFunctionTable = getPrettyPrintedShiftData(shiftResults, {
@@ -245,6 +299,12 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
 `;
   }
 
+  // TODO(bckenny): pre-run to get them in parallel (functions below will access the cache).
+  await Promise.all([
+    prerunShiftFunction(filename),
+    prerunQuantiles(filename),
+  ]);
+
   const shiftResults = await getShiftFunctionDeciles(filename, {quiet: false});
   const shiftFunctionTable = getPrettyPrintedShiftData(shiftResults, {
     baseName,
@@ -348,11 +408,6 @@ async function run() {
   const latestTable = await haTablesData.getLatestTable();
   const lastMonth = await haTablesData.getMonthBefore(latestTable);
   const lastYear = await haTablesData.getYearBefore(latestTable);
-
-  // TODO(bckenny): temp block from new expensive run if new data comes out.
-  if (latestTable.month !== 7) {
-    throw new Error('Is august out yet?');
-  }
 
   const paddedMonth = String(latestTable.month).padStart(2, '0');
   const outDirname = `${PROJECT_ROOT}/reports/metrics/${latestTable.year}-${paddedMonth}`;
