@@ -1,4 +1,7 @@
-# Analysis of HTTP Archive Lighthouse results, September 2020 
+# Analysis of HTTP Archive Lighthouse results, September 2020
+
+**Note**: the month-over-month comparison uses data from two months prior due to CPU throttling being disabled in [August](../2020-08/report.md), however there was still a significant change in throttling from July to September, switching from cgroups-based to DevTools-protocol-based CPU throttling (see [HTTPArchive/httparchive.org#217](https://github.com/HTTPArchive/httparchive.org/issues/217) for more details).
+
 ## Summary of queried tables
 **September 2020** (latest):
   - Lighthouse versions: [`5.6.0`](https://github.com/GoogleChrome/lighthouse/releases/tag/v5.6.0), and [`6.3.0`](https://github.com/GoogleChrome/lighthouse/releases/tag/v6.3.0)
