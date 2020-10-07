@@ -191,6 +191,7 @@ async function selectHaTable(testDataset) {
     };
   });
 
+  /** @type {{selectedTableId: string}} */
   const {selectedTableId} = await enquirer.prompt({
     type: 'select',
     name: 'selectedTableId',
