@@ -51,7 +51,7 @@ const DEFAULT_NBOOT = 200;
 function ciToApaString(value, ciLow, ciHigh, unit = '', digits = 1) {
   const valueStr = value.toLocaleString(undefined, {
     maximumFractionDigits: digits,
-    // @ts-expect-error - Always show ± sign, except when zero. Option not yet in d.ts.
+    // Always show ± sign, except when zero.
     signDisplay: 'exceptZero',
   });
 
