@@ -32,7 +32,7 @@ import HaTablesData, {
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
 /** @typedef {import('@google-cloud/bigquery').Table} Table */
 
-/** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
+/** @typedef {import('../types/externs').HttpArchiveTableInfo} HttpArchiveTableInfo */
 
 /**
  * The metric values available to query.
@@ -53,31 +53,31 @@ import HaTablesData, {
  * Assert the source project/dataset ids to extract from are valid and,
  * (HACK) if in a test, that the default HTTP Archive dataset isn't accidentally
  * being used.
- * @param {HaTableInfo['sourceDataset']} sourceDataset
+ * @param {HttpArchiveTableInfo['sourceDataset']} sourceDataset
  */
-function assertValidSourceDataset({haProjectId, haDatasetId}) {
-  assertValidProjectId(haProjectId);
-  assertValidBigQueryId(haDatasetId);
+function assertValidSourceDataset({projectId, datasetId}) {
+  assertValidProjectId(projectId);
+  assertValidBigQueryId(datasetId);
 
   // Querying the full HTTP Archive tables is expensive.
   // HACK: if in a test, don't accidentally use the defaults.
   const isTest = typeof global.describe === 'function' && typeof global.beforeEach === 'function';
-  if (isTest && haProjectId === 'httparchive') {
+  if (isTest && projectId === 'httparchive') {
     throw new Error('appear to be in test but still using the default httparchive source IDs');
   }
 }
 
 /**
  * Assumes always day 01 even back when runs happened twice a month.
- * @param {HaTableInfo} haTableInfo
+ * @param {HttpArchiveTableInfo} haTableInfo
  */
-function getFullHttpArchiveTableId({year, month, sourceDataset: {haProjectId, haDatasetId}}) {
+function getFullHttpArchiveTableId({year, month, sourceDataset: {projectId, datasetId}}) {
   assertValidYear(year);
   assertValidMonth(month);
-  assertValidSourceDataset({haProjectId, haDatasetId});
+  assertValidSourceDataset({projectId, datasetId});
 
   const paddedMonth = String(month).padStart(2, '0');
-  return `${haProjectId}.${haDatasetId}.${year}_${paddedMonth}_01_mobile`;
+  return `${projectId}.${datasetId}.${year}_${paddedMonth}_01_mobile`;
 }
 
 /**
@@ -191,7 +191,7 @@ function isValidExpectedSchema(schema) {
 
 /**
  * Get query to extract metrics from HTTPArchive LHRs.
- * @param {HaTableInfo} haTableInfo
+ * @param {HttpArchiveTableInfo} haTableInfo
  * @return {string}
  */
 function getLhrExtractQuery(haTableInfo) {
@@ -377,7 +377,7 @@ async function isExtractedTableValid(extractedTable) {
 /**
  * Create the given table and extract LHR data to it.
  * @param {Table} extractedTable
- * @param {HaTableInfo} haTableInfo
+ * @param {HttpArchiveTableInfo} haTableInfo
  */
 async function createExtractedTable(extractedTable, haTableInfo) {
   const extractedTableName = extractedTable.id || 'Table';
@@ -408,7 +408,7 @@ async function createExtractedTable(extractedTable, haTableInfo) {
  * Returns a reference to the table with the extracted metrics.
  * By default these are extracted from the official `httparchive.lighthouse.*`
  * tables, but this can be overriden in `HaTableInfo.sourceDataset`.
- * @param {HaTableInfo} haTableInfo
+ * @param {HttpArchiveTableInfo} haTableInfo
  * @return {Promise<Table>}
  */
 async function extractMetricsFromHaLhrs(haTableInfo) {
@@ -462,16 +462,16 @@ async function extractMetricsFromHaLhrs(haTableInfo) {
  * Returns the total number of rows in the given table.
  * By default these are extracted from the official `httparchive.lighthouse.*`
  * tables, but this can be overriden in the `HaTableInfo.sourceDataset`.
- * @param {HaTableInfo} haTableInfo
+ * @param {HttpArchiveTableInfo} haTableInfo
  * @return {Promise<number>}
  */
 async function getTotalRows(haTableInfo) {
-  const {tableId, sourceDataset: {haProjectId, haDatasetId}} = haTableInfo;
+  const {tableId, sourceDataset: {projectId, datasetId}} = haTableInfo;
   assertValidBigQueryId(tableId);
-  assertValidSourceDataset({haProjectId, haDatasetId});
+  assertValidSourceDataset({projectId, datasetId});
 
   const rowNumQuery = `SELECT row_count AS rowCount
-    FROM \`${haProjectId}.${haDatasetId}.__TABLES__\`
+    FROM \`${projectId}.${datasetId}.__TABLES__\`
     WHERE table_id = '${tableId}'`;
 
   const [rows] = await haTableInfo.extractedDataset.bigQuery.query({
