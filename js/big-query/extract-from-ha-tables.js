@@ -21,18 +21,14 @@
  */
 
 import {assertValidProjectId, assertValidBigQueryId} from './bq-utils.js';
-import HaTablesData, {
-  assertValidMonth,
-  assertValidYear,
-  getExtractedTableId,
-} from './ha-tables-data.js';
+import {addExtractedToLhrTable, assertValidLhrTableInfo} from './lhr-tables-data.js';
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
 /** @typedef {Immutable<import('@google-cloud/bigquery').TableSchema>} TableSchema */
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
 /** @typedef {import('@google-cloud/bigquery').Table} Table */
 
-/** @typedef {import('../types/externs').HttpArchiveTableInfo} HttpArchiveTableInfo */
+/** @typedef {import('../types/externs').LhrTableInfo} LhrTableInfo */
 
 /**
  * The metric values available to query.
@@ -53,7 +49,7 @@ import HaTablesData, {
  * Assert the source project/dataset ids to extract from are valid and,
  * (HACK) if in a test, that the default HTTP Archive dataset isn't accidentally
  * being used.
- * @param {HttpArchiveTableInfo['sourceDataset']} sourceDataset
+ * @param {LhrTableInfo['sourceDataset']} sourceDataset
  */
 function assertValidSourceDataset({projectId, datasetId}) {
   assertValidProjectId(projectId);
@@ -68,16 +64,16 @@ function assertValidSourceDataset({projectId, datasetId}) {
 }
 
 /**
- * Assumes always day 01 even back when runs happened twice a month.
- * @param {HttpArchiveTableInfo} haTableInfo
+ * Returns a fully qualified table reference, including project, dataset, and table IDs.
+ * @param {LhrTableInfo} lhrTableInfo
+ * @return {string}
  */
-function getFullHttpArchiveTableId({year, month, sourceDataset: {projectId, datasetId}}) {
-  assertValidYear(year);
-  assertValidMonth(month);
+function getFullyQualifiedSourceTableId(lhrTableInfo) {
+  const {tableId, sourceDataset: {projectId, datasetId}} = lhrTableInfo;
   assertValidSourceDataset({projectId, datasetId});
+  assertValidBigQueryId(tableId);
 
-  const paddedMonth = String(month).padStart(2, '0');
-  return `${projectId}.${datasetId}.${year}_${paddedMonth}_01_mobile`;
+  return `${projectId}.${datasetId}.${tableId}`;
 }
 
 /**
@@ -190,12 +186,12 @@ function isValidExpectedSchema(schema) {
 }
 
 /**
- * Get query to extract metrics from HTTPArchive LHRs.
- * @param {HttpArchiveTableInfo} haTableInfo
+ * Get query to extract metrics from HTTPArchive-like LHRs.
+ * @param {LhrTableInfo} lhrTableInfo
  * @return {string}
  */
-function getLhrExtractQuery(haTableInfo) {
-  const haTableId = getFullHttpArchiveTableId(haTableInfo);
+function getLhrExtractQuery(lhrTableInfo) {
+  const qualifiedTableId = getFullyQualifiedSourceTableId(lhrTableInfo);
 
   /* eslint-disable max-len */
   return `SELECT
@@ -327,7 +323,7 @@ function getLhrExtractQuery(haTableInfo) {
           END AS minor_lh_version,
 
         JSON_EXTRACT_SCALAR(report, '$.runtimeError.code') AS raw_runtime_error_code
-      FROM \`${haTableId}\`
+      FROM \`${qualifiedTableId}\`
       WHERE report is not NULL
     )`;
   /* eslint-enable max-len */
@@ -377,9 +373,9 @@ async function isExtractedTableValid(extractedTable) {
 /**
  * Create the given table and extract LHR data to it.
  * @param {Table} extractedTable
- * @param {HttpArchiveTableInfo} haTableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  */
-async function createExtractedTable(extractedTable, haTableInfo) {
+async function createExtractedTable(extractedTable, lhrTableInfo) {
   const extractedTableName = extractedTable.id || 'Table';
 
   const schema = getExtractedTableSchema();
@@ -387,9 +383,9 @@ async function createExtractedTable(extractedTable, haTableInfo) {
   console.warn(`  '${extractedTableName}' created.`);
 
   // And extract to it.
-  const haTableId = getFullHttpArchiveTableId(haTableInfo);
-  console.warn(`Extracting metrics from ${haTableId} and saving to ${extractedTableName}...`);
-  const extractQuery = getLhrExtractQuery(haTableInfo);
+  const loggingTableId = getFullyQualifiedSourceTableId(lhrTableInfo);
+  console.warn(`Extracting metrics from ${loggingTableId} and saving to ${extractedTableName}...`);
+  const extractQuery = getLhrExtractQuery(lhrTableInfo);
   const [extractJob] = await extractedTable.bigQuery.createQueryJob({
     query: extractQuery,
     // Write to extractedTable only if it doesn't already exist.
@@ -401,30 +397,26 @@ async function createExtractedTable(extractedTable, haTableInfo) {
 }
 
 /**
- * Extracts the key metrics from the LHR JSON strings in the given HTTP Archive
- * table and saves them as columns in a matching extracted table in
- * `extractedDataset` from `haTableInfo`. If a table by that ID already exists
- * (and it matches the expected schema), no additional work is done.
- * Returns a reference to the table with the extracted metrics.
- * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in `HaTableInfo.sourceDataset`.
- * @param {HttpArchiveTableInfo} haTableInfo
+ * Extracts the key metrics from the LHR JSON strings in the given LHR table and
+ * saves them as columns in a matching extracted table in `extractedDataset`. If
+ * a table by that ID already exists (and it matches the expected schema), no
+ * additional work is done. Returns a reference to the table with the extracted
+ * metrics.
+ * @param {LhrTableInfo} lhrTableInfo
  * @return {Promise<Table>}
  */
-async function extractMetricsFromHaLhrs(haTableInfo) {
-  // Fail early on invalid input.
-  assertValidYear(haTableInfo.year);
-  assertValidMonth(haTableInfo.month);
-  assertValidSourceDataset(haTableInfo.sourceDataset);
+async function extractMetricsFromLhrTable(lhrTableInfo) {
+  // This function is a common entry point to fetching data, so fail here on
+  // invalid input for quick error feedback.
+  assertValidLhrTableInfo(lhrTableInfo);
 
-  // haTableInfos are created only in this process. Assume no one is changing
-  // schemas since process began and so can return `extractedTable` if present.
-  if (haTableInfo.extractedTable) {
-    return haTableInfo.extractedTable;
+  // LhrTableInfos are created only in this process. Assuming no one is changing
+  // schemas since process began, then we can return `extractedTable` if present.
+  if (lhrTableInfo.extractedTable) {
+    return lhrTableInfo.extractedTable;
   }
 
-  const extractedTableId = getExtractedTableId(haTableInfo);
-  const {extractedDataset} = haTableInfo;
+  const {extractedTableId, extractedDataset} = lhrTableInfo;
   const extractedTable = extractedDataset.table(extractedTableId);
 
   // Otherwise, check if LHR has already been extracted and existing table's schema looks right.
@@ -433,7 +425,7 @@ async function extractMetricsFromHaLhrs(haTableInfo) {
     console.warn('  Table already exists. Checking if schema matches...');
     const isValid = await isExtractedTableValid(extractedTable);
     if (isValid) {
-      HaTablesData.addExtractedTable(haTableInfo, extractedTable);
+      addExtractedToLhrTable(lhrTableInfo, extractedTable);
       console.warn('  Table is good to go. Using it.');
       return extractedTable;
     }
@@ -443,9 +435,11 @@ async function extractMetricsFromHaLhrs(haTableInfo) {
     await extractedTable.delete();
   }
 
+  // TODO(bckenny): verify table is sufficiently HA-like.
+
   // If not, create new table.
   console.warn('  Valid table not found. Creating one...');
-  await createExtractedTable(extractedTable, haTableInfo);
+  await createExtractedTable(extractedTable, lhrTableInfo);
 
   // Throw if somehow the extracted table is invalid or empty.
   const isValid = await isExtractedTableValid(extractedTable);
@@ -454,19 +448,17 @@ async function extractMetricsFromHaLhrs(haTableInfo) {
         'is empty or invalid');
   }
 
-  HaTablesData.addExtractedTable(haTableInfo, extractedTable);
+  addExtractedToLhrTable(lhrTableInfo, extractedTable);
   return extractedTable;
 }
 
 /**
- * Returns the total number of rows in the given table.
- * By default these are extracted from the official `httparchive.lighthouse.*`
- * tables, but this can be overriden in the `HaTableInfo.sourceDataset`.
- * @param {HttpArchiveTableInfo} haTableInfo
+ * Returns the total number of rows in the given source table.
+ * @param {LhrTableInfo} lhrTableInfo
  * @return {Promise<number>}
  */
-async function getTotalRows(haTableInfo) {
-  const {tableId, sourceDataset: {projectId, datasetId}} = haTableInfo;
+async function getTotalRows(lhrTableInfo) {
+  const {tableId, sourceDataset: {projectId, datasetId}} = lhrTableInfo;
   assertValidBigQueryId(tableId);
   assertValidSourceDataset({projectId, datasetId});
 
@@ -474,7 +466,7 @@ async function getTotalRows(haTableInfo) {
     FROM \`${projectId}.${datasetId}.__TABLES__\`
     WHERE table_id = '${tableId}'`;
 
-  const [rows] = await haTableInfo.extractedDataset.bigQuery.query({
+  const [rows] = await lhrTableInfo.extractedDataset.bigQuery.query({
     query: rowNumQuery,
   });
 
@@ -489,6 +481,7 @@ async function getTotalRows(haTableInfo) {
 }
 
 export {
-  extractMetricsFromHaLhrs,
+  extractMetricsFromLhrTable,
+  getFullyQualifiedSourceTableId,
   getTotalRows,
 };

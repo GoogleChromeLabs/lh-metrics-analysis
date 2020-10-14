@@ -23,13 +23,21 @@ const {Storage} = CSModule;
 
 import {PROJECT_ROOT} from '../module-utils.js';
 import credentials from './auth/credentials.js';
-import {extractMetricsFromHaLhrs} from './extract-from-ha-tables.js';
-import {assertValidYear, assertValidMonth, getExtractedTableId} from './ha-tables-data.js';
+import {
+  extractMetricsFromLhrTable,
+  getFullyQualifiedSourceTableId,
+} from './extract-from-ha-tables.js';
+import {
+  assertValidYear,
+  assertValidMonth,
+  isHttpArchiveTable,
+  getTableDate,
+} from './ha-tables-data.js';
 import {assertValidBigQueryId, assertValidColumnName, getUuidTableSuffix} from './bq-utils.js';
 
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
 
-/** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
+/** @typedef {import('../types/externs').LhrTableInfo} LhrTableInfo */
 /** @typedef {import('./extract-from-ha-tables.js').MetricValueId} MetricValueId */
 
 // TODO(bckenny): bucket name will need to be settable to be generally usable.
@@ -62,52 +70,69 @@ function encodeValidEtag(tableEtag) {
 }
 
 /**
+ * Generates a part of a file path used for identifying what BigQuery table the
+ * source of the data is from. Uses `YYYY-MM` shorthand for HTTP Archive tables,
+ * or `fully-qualified-table-id` for arbitrary tables with LHRs in them.
+ * @param {LhrTableInfo} lhrTableInfo
+ * @return {string}
+ */
+function getTableFileIdentifier(lhrTableInfo) {
+  if (isHttpArchiveTable(lhrTableInfo)) {
+    const {year, month} = getTableDate(lhrTableInfo.tableId);
+    assertValidYear(year);
+    assertValidMonth(month);
+    const paddedMonth = String(month).padStart(2, '0');
+
+    return `${year}-${paddedMonth}`;
+  }
+
+  // Default to fully qualified source name with '_' and '.' replaced with '-'.
+  return getFullyQualifiedSourceTableId(lhrTableInfo)
+    .replace(/[._]/g, '-');
+}
+
+/**
  * Generates an absolute path for a single-metric saved file, of the form
- * `PROJECT_ROOT/data/metricValueId/YYYY-MM.etag.csv'.
+ * `PROJECT_ROOT/data/metricValueId/YYYY-MM.etag.csv' for HTTP Archive tables,
+ * or `PROJECT_ROOT/data/metricValueId/fully-qualified-table-id.etag.csv' for
+ * arbitrary tables with LHRs in them.
  * @param {MetricValueId|'performance_score'} metricValueId
- * @param {HaTableInfo} haTableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  * @param {string} tableEtag
  * @return {string}
  */
-function getSingleSaveFilename(metricValueId, haTableInfo, tableEtag) {
-  const {year, month} = haTableInfo;
-  assertValidYear(year);
-  assertValidMonth(month);
-  const paddedMonth = String(month).padStart(2, '0');
-
+function getSingleSaveFilename(metricValueId, lhrTableInfo, tableEtag) {
   const encodedEtag = encodeValidEtag(tableEtag);
 
-  const relativePath = `/data/${metricValueId}/${year}-${paddedMonth}.${encodedEtag}.csv`;
+  const fileIdentifier = getTableFileIdentifier(lhrTableInfo);
+
+  const relativePath = `/data/${metricValueId}/${fileIdentifier}.${encodedEtag}.csv`;
   return path.normalize(PROJECT_ROOT + relativePath);
 }
 
 /**
  * Generates an absolute path for a paired-metric saved file, of the form
- * `PROJECT_ROOT/data/metricId/paired-YYYY-MM-to-YYYY-MM.betag-cetag.csv'.
+ * `PROJECT_ROOT/data/metricId/paired-YYYY-MM-to-YYYY-MM.betag-cetag.csv' for
+ * HTTP Archive tables, or
+ * `PROJECT_ROOT/data/metricValueId/paired-fully-qualified-table-id-to-fully-qualified-table-id.etag.csv'
+ * (or a mix of the two) for arbitrary tables with LHRs in them.
  * @param {MetricValueId|'performance_score'} metricValueId
- * @param {HaTableInfo} baseTableInfo
+ * @param {LhrTableInfo} baseTableInfo
  * @param {string} baseEtag
- * @param {HaTableInfo} compareTableInfo
+ * @param {LhrTableInfo} compareTableInfo
  * @param {string} compareEtag
  * @return {string}
  */
 function getPairedSaveFilename(metricValueId, baseTableInfo, baseEtag, compareTableInfo,
     compareEtag) {
-  const {year: baseYear, month: baseMonth} = baseTableInfo;
-  assertValidYear(baseYear);
-  assertValidMonth(baseMonth);
-  const {year: compareYear, month: compareMonth} = compareTableInfo;
-  assertValidYear(compareYear);
-  assertValidMonth(compareMonth);
-
-  const paddedBaseMonth = String(baseMonth).padStart(2, '0');
-  const paddedCompareMonth = String(compareMonth).padStart(2, '0');
+  const baseFileIdentifier = getTableFileIdentifier(baseTableInfo);
+  const compareFileIdentifier = getTableFileIdentifier(compareTableInfo);
 
   const encodedBaseEtag = encodeValidEtag(baseEtag);
   const encodedCompareEtag = encodeValidEtag(compareEtag);
 
   const relativePath = `/data/${metricValueId}/` +
-      `paired-${baseYear}-${paddedBaseMonth}-to-${compareYear}-${paddedCompareMonth}.` +
+      `paired-${baseFileIdentifier}-to-${compareFileIdentifier}.` +
       `${encodedBaseEtag}-${encodedCompareEtag}.csv`;
   return path.normalize(PROJECT_ROOT + relativePath);
 }
@@ -135,16 +160,16 @@ async function getCsvRowCount(filename) {
 
 /**
  * A query string to get a single column (with the name from `metricValueId`) of
- * results for the given metric and HTTP Archive run.
+ * results for the given metric from the given extracted table.
  * Query assumes it will be run in the context of an established dataset (table
  * in FROM clause isn't qualified by project/dataset).
- * @param {HaTableInfo} tableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
  * @return {string}
  */
-function getSingleTableMetricQuery(tableInfo, metricValueId) {
+function getSingleTableMetricQuery(lhrTableInfo, metricValueId) {
   assertValidColumnName(metricValueId);
-  const extractedTableId = getExtractedTableId(tableInfo);
+  const {extractedTableId} = lhrTableInfo;
   assertValidBigQueryId(extractedTableId);
 
   return `SELECT
@@ -160,22 +185,22 @@ function getSingleTableMetricQuery(tableInfo, metricValueId) {
 }
 
 /**
- * A query string to get two columns (named `base` and `compare`) of results for the
- * given metric and two HTTP Archive runs, joined on URLs.
+ * A query string to get two columns (to be named `base` and `compare`) of
+ * results for the given metric and two extracted tables, joined on URLs.
  * Query assumes it will be run in the context of an established dataset (table
  * in FROM clause isn't qualified by project/dataset).
- * @param {HaTableInfo} baseTableInfo
- * @param {HaTableInfo} compareTableInfo
+ * @param {LhrTableInfo} baseTableInfo
+ * @param {LhrTableInfo} compareTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
  * @return {string}
  */
 function getPairedTablesMetricQuery(baseTableInfo, compareTableInfo, metricValueId) {
   assertValidColumnName(metricValueId);
 
-  const baseTableId = getExtractedTableId(baseTableInfo);
+  const baseTableId = baseTableInfo.extractedTableId;
   assertValidBigQueryId(baseTableId);
 
-  const compareTableId = getExtractedTableId(compareTableInfo);
+  const compareTableId = compareTableInfo.extractedTableId;
   assertValidBigQueryId(compareTableId);
 
   return `SELECT
@@ -257,23 +282,23 @@ async function getMetricQueryResults(metricQuery, extractedDataset, metricValueI
 }
 
 /**
- * Query a metric from the given HTTP Archive table and save locally as a
+ * Query a metric from the source LHR table and save locally as a
  * single-column csv file.
- * @param {HaTableInfo} haTableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
  * @return {Promise<{filename: string, numRows: number}>}
  */
-async function fetchSingleTableMetric(haTableInfo, metricValueId) {
+async function fetchSingleTableMetric(lhrTableInfo, metricValueId) {
   console.warn(`Fetching '${metricValueId}' from extracted HTTP Archive run ` +
-      `${getExtractedTableId(haTableInfo)}`);
+      `${lhrTableInfo.extractedTableId}`);
 
   // Start by making sure target HTTP Archive run has been extracted.
-  const extractedTable = await extractMetricsFromHaLhrs(haTableInfo);
+  const extractedTable = await extractMetricsFromLhrTable(lhrTableInfo);
   const [extractedMetadata] = await extractedTable.getMetadata();
   const extractedEtag = extractedMetadata.etag;
 
   // If file is already downloaded for this specific etag, we're good.
-  const filename = getSingleSaveFilename(metricValueId, haTableInfo, extractedEtag);
+  const filename = getSingleSaveFilename(metricValueId, lhrTableInfo, extractedEtag);
   if (fs.existsSync(filename)) {
     const numRows = await getCsvRowCount(filename);
     console.warn(`  ./${path.relative(PROJECT_ROOT, filename)} already saved locally. Using it!`);
@@ -285,8 +310,8 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId) {
   // TODO(bckenny): at some point, should probably clean up old data files with old etags.
 
   // If not, download a single column of metric data.
-  const metricQuery = getSingleTableMetricQuery(haTableInfo, metricValueId);
-  const extractedDataset = haTableInfo.extractedDataset;
+  const metricQuery = getSingleTableMetricQuery(lhrTableInfo, metricValueId);
+  const extractedDataset = lhrTableInfo.extractedDataset;
   const {results: metricCsv, numRows} = await getMetricQueryResults(metricQuery,
       extractedDataset, metricValueId);
 
@@ -301,29 +326,30 @@ async function fetchSingleTableMetric(haTableInfo, metricValueId) {
 }
 
 /**
- * Query the given metric from the base and compare HTTP Archive tables, joined
- * on both `requested_url` and `final_url`, and save locally as a two-column csv
- * file. Results may be smaller than from each of the two separate tables as
- * both are required to have a non-error result for a particular URL.
- * Caching relies on the order of `base` and `compare` for simplicity, so always
- * use the same order to avoid doing extra work.
- * @param {HaTableInfo} baseTableInfo
- * @param {HaTableInfo} compareTableInfo
+ * Query the given metric from the `base` and `compare` LHR-containing tables
+ * (like from the HTTP Archive), joined on both `requested_url` and `final_url`,
+ * and save the results locally as a two-column csv file. Results may be smaller
+ * than from each of the two separate tables as both are required to have a non-
+ * error result for a particular URL. Caching relies on the order of `base` and
+ * `compare` for simplicity, so always use the same order to avoid doing extra
+ * work.
+ * @param {LhrTableInfo} baseTableInfo
+ * @param {LhrTableInfo} compareTableInfo
  * @param {MetricValueId|'performance_score'} metricValueId
  * @return {Promise<{filename: string, numRows: number}>}
  */
 async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricValueId) {
-  if (getExtractedTableId(baseTableInfo) === getExtractedTableId(compareTableInfo)) {
+  if (baseTableInfo.extractedTableId === compareTableInfo.extractedTableId) {
     throw new Error('Cannot fetch with same table as base and compare');
   }
 
   console.warn(`Fetching paired '${metricValueId}' from extracted HTTP Archive runs ` +
-      `${getExtractedTableId(baseTableInfo)} and ${getExtractedTableId(compareTableInfo)}`);
+      `${baseTableInfo.extractedTableId} and ${compareTableInfo.extractedTableId}`);
 
   // Start by making sure target HTTP Archive runs have been extracted.
   const [baseTable, compareTable] = await Promise.all([
-    extractMetricsFromHaLhrs(baseTableInfo),
-    extractMetricsFromHaLhrs(compareTableInfo),
+    extractMetricsFromLhrTable(baseTableInfo),
+    extractMetricsFromLhrTable(compareTableInfo),
   ]);
   const [baseMetadata] = await baseTable.getMetadata();
   const baseEtag = baseMetadata.etag;
@@ -366,21 +392,21 @@ async function fetchPairedTablesMetric(baseTableInfo, compareTableInfo, metricVa
  * limited to columns with a limited number of possibilities.
  * If one of the values is `null`, the returned object will have a property with
  * a key of (the stringified) `'null'` for the count of the null values.
- * @param {HaTableInfo} tableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  * @param {'lh_version'|'runtime_error_code'|'chrome_version'|'performance_score'} columnId
  * @return {Promise<Record<string, number>>}
  */
-async function fetchUniqueValueCounts(tableInfo, columnId) {
+async function fetchUniqueValueCounts(lhrTableInfo, columnId) {
   console.warn(`Fetching ${columnId} counts from extracted HTTP Archive run ` +
-      `${getExtractedTableId(tableInfo)}`);
+      `${lhrTableInfo.extractedTableId}`);
 
   // Fail early on invalid identifiers.
   assertValidColumnName(columnId);
-  const extractedTableId = getExtractedTableId(tableInfo);
+  const {extractedTableId} = lhrTableInfo;
   assertValidBigQueryId(extractedTableId);
 
-  // Start by making sure target HTTP Archive runs have been extracted.
-  await extractMetricsFromHaLhrs(tableInfo);
+  // Start by making sure target LHR table has been extracted.
+  await extractMetricsFromLhrTable(lhrTableInfo);
 
   const countQuery = `SELECT
       ${columnId},
@@ -392,7 +418,7 @@ async function fetchUniqueValueCounts(tableInfo, columnId) {
     ORDER BY
       ${columnId}`;
 
-  const [rows] = await tableInfo.extractedDataset.query({
+  const [rows] = await lhrTableInfo.extractedDataset.query({
     query: countQuery,
   });
 
