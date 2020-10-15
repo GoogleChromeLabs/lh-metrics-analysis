@@ -409,6 +409,7 @@ async function extractMetricsFromLhrTable(lhrTableInfo) {
   // This function is a common entry point to fetching data, so fail here on
   // invalid input for quick error feedback.
   assertValidLhrTableInfo(lhrTableInfo);
+  assertValidSourceDataset(lhrTableInfo.sourceDataset);
 
   // LhrTableInfos are created only in this process. Assuming no one is changing
   // schemas since process began, then we can return `extractedTable` if present.

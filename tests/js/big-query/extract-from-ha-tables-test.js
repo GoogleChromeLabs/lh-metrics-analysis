@@ -23,11 +23,15 @@ import {strict as assert} from 'assert';
 import BQModule from '@google-cloud/bigquery';
 const {BigQuery} = BQModule;
 
-import HaTablesData, {getExtractedTableId} from '../../../js/big-query/ha-tables-data.js';
+import HaTablesData, {
+  getTableDate,
+  getExtractedTableId,
+} from '../../../js/big-query/ha-tables-data.js';
 import credentials from '../../../js/big-query/auth/credentials.js';
 import {assertValidBigQueryId} from '../../../js/big-query/bq-utils.js';
 import {
-  extractMetricsFromHaLhrs,
+  extractMetricsFromLhrTable,
+  getFullyQualifiedSourceTableId,
   getTotalRows,
 } from '../../../js/big-query/extract-from-ha-tables.js';
 
@@ -36,12 +40,12 @@ import expectedExtractedTables from './expected-extracted-tables.js';
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
 /** @typedef {import('@google-cloud/bigquery').Table} Table */
 /** @typedef {import('@google-cloud/bigquery').TableSchema} TableSchema */
-/** @typedef {import('../../../js/types/externs').HaTableInfo} HaTableInfo */
+/** @typedef {import('../../../js/types/externs').LhrTableInfo} LhrTableInfo */
 
 // Source tables for test.
 const testSourceDataset = {
-  haProjectId: 'lh-metrics-analysis',
-  haDatasetId: 'test_lighthouse',
+  projectId: 'lh-metrics-analysis',
+  datasetId: 'test_lighthouse',
 };
 // Extracted dataset for test.
 const extractedDatasetId = 'test_lh_extract';
@@ -82,52 +86,52 @@ describe('Extraction from HTTP Archive tables', () => {
         const defaultHaTablesData = new HaTablesData(extractedDataset);
         const tables = await defaultHaTablesData.getListOfTables();
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(tables[0]);
+          return extractMetricsFromLhrTable(tables[0]);
         }, /^Error: appear to be in test but still using the default httparchive source IDs$/);
       });
 
       it('throws on an invalid source project ID', async () => {
         const [realTable] = await haTablesData.getListOfTables();
-        const badSourceDataset = {haProjectId: ')(---)(', haDatasetId: '|||'};
+        const badSourceDataset = {projectId: ')(---)(', datasetId: '|||'};
         const badTable = {...realTable, sourceDataset: badSourceDataset};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(badTable);
+          return extractMetricsFromLhrTable(badTable);
         }, /^Error: invalid GCloud project id '\)\(---\)\('$/);
       });
 
       it('throws on an invalid source dataset ID', async () => {
         const [realTable] = await haTablesData.getListOfTables();
-        const badSourceDataset = {haProjectId: 'a--b', haDatasetId: '|||'};
+        const badSourceDataset = {projectId: 'a--b', datasetId: '|||'};
         const badTable = {...realTable, sourceDataset: badSourceDataset};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(badTable);
+          return extractMetricsFromLhrTable(badTable);
         }, /^Error: invalid BigQuery id '|||'$/);
       });
 
-      it('throws for non-integer or out of range months', async () => {
+      it('throws on an invalid tableId', async () => {
         const [realTable] = await haTablesData.getListOfTables();
-        const testTable = {...realTable, month: -1};
+        const testTable = {...realTable, tableId: 'my-table'};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(testTable);
-        }, /^Error: Invalid.+month -1$/);
+          return extractMetricsFromLhrTable(testTable);
+        }, /^Error: invalid BigQuery id 'my-table'$/);
 
-        const testTable2 = {...realTable, month: 2.5};
+        const testTable2 = {...realTable, tableId: ')('};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(testTable2);
-        }, /^Error: Invalid.+month 2.5$/);
+          return extractMetricsFromLhrTable(testTable2);
+        }, /^Error: invalid BigQuery id '\)\('$/);
       });
 
-      it('throws for non-integer or out of range years', async () => {
+      it('throws on an invalid extractedTableId', async () => {
         const [realTable] = await haTablesData.getListOfTables();
-        const testTable = {...realTable, year: -1};
+        const testTable = {...realTable, extractedTableId: 'my-table'};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(testTable);
-        }, /^Error: Invalid.+year -1$/);
+          return extractMetricsFromLhrTable(testTable);
+        }, /^Error: invalid BigQuery id 'my-table'$/);
 
-        const testTable2 = {...realTable, year: 2020.6};
+        const testTable2 = {...realTable, extractedTableId: ')('};
         await assert.rejects(async () => {
-          return extractMetricsFromHaLhrs(testTable2);
-        }, /^Error: Invalid.+year 2020.6$/);
+          return extractMetricsFromLhrTable(testTable2);
+        }, /^Error: invalid BigQuery id '\)\('$/);
       });
     });
 
@@ -148,7 +152,8 @@ describe('Extraction from HTTP Archive tables', () => {
         const sourceTables = await haTablesData.getListOfTables();
 
         // Fail if test tables haven't been updated in the last six months.
-        const latestSourceTableDate = new Date(sourceTables[0].year, sourceTables[0].month - 1);
+        const {year: latestYear, month: latestMonth} = getTableDate(sourceTables[0].tableId);
+        const latestSourceTableDate = new Date(latestYear, latestMonth - 1);
         if (Date.now() - latestSourceTableDate.getTime() > (6 * 30 * 24 * 60 * 60 * 1000)) {
           throw new Error('Re-run `generate-test-ha-tables.js` to get an up-to-date test table');
         }
@@ -166,7 +171,7 @@ describe('Extraction from HTTP Archive tables', () => {
         // Also demonstrates function can be used concurrently.
         const extractedTableRequests = sourceTables.map(async sourceTableInfo => {
           try {
-            const extractedTable = await extractMetricsFromHaLhrs(sourceTableInfo);
+            const extractedTable = await extractMetricsFromLhrTable(sourceTableInfo);
             /** @type {[string, Table]} */
             const result = [sourceTableInfo.tableId, extractedTable];
             return result;
@@ -188,7 +193,10 @@ describe('Extraction from HTTP Archive tables', () => {
         extractedContent = Object.fromEntries(await Promise.all(extractedContentRequests));
       });
 
-      after(async () => {
+      after(async function() {
+        // Give a little more time.
+        this.timeout(10_000);
+
         const [testTables] = await extractedDataset.getTables();
         await Promise.all(testTables.map(testTable => testTable.delete()));
 
@@ -243,11 +251,11 @@ describe('Extraction from HTTP Archive tables', () => {
 
         /**
          * Get metadata for an already-extracted HA table.
-         * @param {{year: number, month: number}} tableInfo
+         * @param {string} tableId
          * @return {Promise<{existingTable: Table, existingMetadata: {etag: string, numBytes: string, numRows: string, creationTime: string, lastModifiedTime: string, schema: TableSchema}}>}
          */
-        async function getTableAndMetadata({year, month}) {
-          const extractedTableId = getExtractedTableId({year, month});
+        async function getTableAndMetadata(tableId) {
+          const extractedTableId = getExtractedTableId(tableId);
           const existingTable = extractedDataset.table(extractedTableId);
           const [tableExists] = await existingTable.exists();
           assert.ok(tableExists);
@@ -262,28 +270,31 @@ describe('Extraction from HTTP Archive tables', () => {
         }
 
         /**
-         * Retrieves the HaTableInfo for the HTTP Archive table matching the
+         * Retrieves the LhrTableInfo for the HTTP Archive table matching the
          * given date.
          * @param {HaTablesData} haTablesData
          * @param {{year: number, month: number}} tableInfo
-         * @return {Promise<HaTableInfo>}
+         * @return {Promise<LhrTableInfo>}
          */
         async function getTableInfo(haTablesData, {year, month}) {
           const tables = await haTablesData.getListOfTables();
-          const firstMatchInfo = tables.find(t => t.year === year && t.month === month);
+          const firstMatchInfo = tables.find(candidate => {
+            const {month: candidateMonth, year: candidateYear} = getTableDate(candidate.tableId);
+            return candidateYear === year && candidateMonth === month;
+          });
           assert.ok(firstMatchInfo);
           return firstMatchInfo;
         }
 
         it('reuses a table if already extracted', async () => {
-          // First table in test set (and HTTP Archive).
-          const firstDate = {year: 2017, month: 6};
-          const {existingMetadata} = await getTableAndMetadata(firstDate);
-
           // Extract from the first HA table again.
-          // NOTE: extractedTable likely from cache on haTableInfo.
+          const firstDate = {year: 2017, month: 6};
           const firstTableInfo = await getTableInfo(haTablesData, firstDate);
-          const extractedFirstTable = await extractMetricsFromHaLhrs(firstTableInfo);
+
+          const {existingMetadata} = await getTableAndMetadata(firstTableInfo.tableId);
+
+          // NOTE: extractedTable likely from cache on lhrTableInfo.
+          const extractedFirstTable = await extractMetricsFromLhrTable(firstTableInfo);
           const [newMetadata] = await extractedFirstTable.getMetadata();
 
           assert.strictEqual(newMetadata.etag, existingMetadata.etag);
@@ -294,16 +305,17 @@ describe('Extraction from HTTP Archive tables', () => {
           assert.strictEqual(newMetadata.numBytes, existingMetadata.numBytes);
         });
 
-        it('reuses a table if already extracted, even from a fresh HaTableInfo', async () => {
+        it('reuses a table if already extracted, even from a fresh LhrTableInfo', async () => {
           // First table in test set (and HTTP Archive).
           const firstDate = {year: 2017, month: 6};
-          const {existingMetadata} = await getTableAndMetadata(firstDate);
 
           // Extract again from a fresh version of the first HA.
           const freshHaTablesData = new HaTablesData(extractedDataset, testSourceDataset);
           const firstTableInfo = await getTableInfo(freshHaTablesData, firstDate);
-          const extractedFirstTable = await extractMetricsFromHaLhrs(firstTableInfo);
+          const extractedFirstTable = await extractMetricsFromLhrTable(firstTableInfo);
           const [newMetadata] = await extractedFirstTable.getMetadata();
+
+          const {existingMetadata} = await getTableAndMetadata(firstTableInfo.tableId);
 
           assert.strictEqual(newMetadata.etag, existingMetadata.etag);
 
@@ -316,7 +328,8 @@ describe('Extraction from HTTP Archive tables', () => {
         it('deletes and reextracts a new table if the schema has changed', async () => {
           // First table in test set (and HTTP Archive).
           const firstDate = {year: 2017, month: 6};
-          const {existingTable, existingMetadata} = await getTableAndMetadata(firstDate);
+          const firstTableId = `2017_06_01_mobile`;
+          const {existingTable, existingMetadata} = await getTableAndMetadata(firstTableId);
 
           // Add an unexpected column to the existing table.
           const {schema} = existingMetadata;
@@ -327,7 +340,7 @@ describe('Extraction from HTTP Archive tables', () => {
           // Extract again from a fresh version of the first HA table.
           const freshHaTablesData = new HaTablesData(extractedDataset, testSourceDataset);
           const firstTableInfo = await getTableInfo(freshHaTablesData, firstDate);
-          const extractedFirstTable = await extractMetricsFromHaLhrs(firstTableInfo);
+          const extractedFirstTable = await extractMetricsFromLhrTable(firstTableInfo);
           const [newMetadata] = await extractedFirstTable.getMetadata();
 
           // Table should be recreated, so creationTime should be new.
@@ -342,7 +355,8 @@ describe('Extraction from HTTP Archive tables', () => {
         it('deletes and reextracts a new table if the existing one is empty', async () => {
           // Second table in test set (let's not hit per-table quota limits).
           const secondDate = {year: 2017, month: 8};
-          const {existingTable, existingMetadata} = await getTableAndMetadata(secondDate);
+          const secondTableId = `2017_08_01_mobile`;
+          const {existingTable, existingMetadata} = await getTableAndMetadata(secondTableId);
 
           // Take the existing schema and delete the existing table.
           const existingTableId = existingTable.id;
@@ -360,7 +374,7 @@ describe('Extraction from HTTP Archive tables', () => {
           // Extract again from a fresh version of the second HA table.
           const freshHaTablesData = new HaTablesData(extractedDataset, testSourceDataset);
           const secondTableInfo = await getTableInfo(freshHaTablesData, secondDate);
-          const extractedNewTable = await extractMetricsFromHaLhrs(secondTableInfo);
+          const extractedNewTable = await extractMetricsFromLhrTable(secondTableInfo);
           const [newMetadata] = await extractedNewTable.getMetadata();
 
           // Table should be recreated, so creationTime should be new.
@@ -390,9 +404,8 @@ describe('Extraction from HTTP Archive tables', () => {
 
     it('throws on an invalid table id', async () => {
       const badTableInfo = {
-        year: 2525,
-        month: 1,
         tableId: 'invalid-table-id',
+        extractedTableId: 'lh-extract-invalid-table-id',
         sourceDataset: testSourceDataset,
         extractedDataset,
       };
@@ -404,9 +417,8 @@ describe('Extraction from HTTP Archive tables', () => {
 
     it('throws when table info cannot be found', async () => {
       const badTableInfo = {
-        year: 2525,
-        month: 1,
         tableId: 'not_a_table_id',
+        extractedTableId: 'lh_extract_not_a_table_id',
         sourceDataset: testSourceDataset,
         extractedDataset,
       };
