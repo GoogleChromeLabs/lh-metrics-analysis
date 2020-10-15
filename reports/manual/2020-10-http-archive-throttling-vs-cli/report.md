@@ -1,6 +1,6 @@
 # Analysis of CLI vs HTTP Archive Lighthouse results, October 2020
 
-**Note**: This is a comparison of a manual Lighthouse CLI run of ~10k sites using the default configuration to compare against HTTP Archive Lighthouse results. HTTP Archive (via WPT) recently switched from cgroups-based to DevTools-protocol-based CPU throttling (see [HTTPArchive/httparchive.org#217](https://github.com/HTTPArchive/httparchive.org/issues/217)), which has had a signficant effect on metric results and their comparability to what a user would see when running Lighthouse on their personal machine.
+**Note**: This is a comparison of a manual Lighthouse CLI run of ~10k sites using the default configuration against HTTP Archive Lighthouse results. HTTP Archive (via WPT) recently switched from cgroups-based to DevTools-protocol-based CPU throttling (see [HTTPArchive/httparchive.org#217](https://github.com/HTTPArchive/httparchive.org/issues/217)), which has had a signficant effect on metric results and their comparability to what a user would see when running Lighthouse on their personal machine.
 
 ## Summary of queried tables
 **Desktop CLI** (default lantern throttling):
