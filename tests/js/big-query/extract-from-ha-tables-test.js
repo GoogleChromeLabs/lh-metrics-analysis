@@ -76,7 +76,7 @@ describe('Extraction from HTTP Archive tables', () => {
 
     before('initialize ha tables data', async function() {
       // First request to BQ can take a while, so give it a bit.
-      this.timeout(10000);
+      this.timeout(10_000);
 
       await haTablesData.getListOfTables();
     });
@@ -424,7 +424,10 @@ describe('Extraction from HTTP Archive tables', () => {
       }, /^Error: unable to find a row count for table 'not_a_table_id'$/);
     });
 
-    it('returns the number of rows in a table', async () => {
+    it('returns the number of rows in a table', async function() {
+      // Actua reqiests to BQ now, so expand timeout.
+      this.timeout(20_000);
+
       const sourceTables = await haTablesData.getListOfTables();
       // Use the last one so it stays fairly stable over time.
       const sourceTableInfo = sourceTables[sourceTables.length - 1];
