@@ -440,4 +440,45 @@ describe('Extraction from HTTP Archive tables', () => {
       assert.strictEqual(totalRows, expectedLength);
     });
   });
+
+  describe('#getFullyQualifiedSourceTableId', () => {
+    const bigQuery = new BigQuery(credentials);
+    const extractedDataset = bigQuery.dataset(extractedDatasetId);
+
+    const testTableInfo = {
+      tableId: 'test_table_id',
+      extractedTableId: 'lh_extract_test_table_id',
+      sourceDataset: testSourceDataset,
+      extractedDataset,
+    };
+
+    it('returns a fully qualified source table ID', () => {
+      const fullyQualifiedId = getFullyQualifiedSourceTableId(testTableInfo);
+      assert.strictEqual(fullyQualifiedId, 'lh-metrics-analysis.test_lighthouse.test_table_id');
+    });
+
+    it('throws if the source tableId is invalid', () => {
+      const badTableIdInfo = {...testTableInfo, tableId: 'hyphens-n-$ymbol$'};
+      assert.throws(() => getFullyQualifiedSourceTableId(badTableIdInfo),
+          /^Error: invalid BigQuery id 'hyphens-n-\$ymbol\$'$/);
+    });
+
+    it('throws if the source projectId is invalid', () => {
+      const badProjectIdInfo = {
+        ...testTableInfo,
+        sourceDataset: {...testSourceDataset, projectId: '()'},
+      };
+      assert.throws(() => getFullyQualifiedSourceTableId(badProjectIdInfo),
+          /^Error: invalid GCloud project id '\(\)'$/);
+    });
+
+    it('throws if the source datasetId is invalid', () => {
+      const badProjectIdInfo = {
+        ...testTableInfo,
+        sourceDataset: {...testSourceDataset, datasetId: '%|-|%'},
+      };
+      assert.throws(() => getFullyQualifiedSourceTableId(badProjectIdInfo),
+          /^Error: invalid BigQuery id '%\|-\|%'$/);
+    });
+  });
 });
