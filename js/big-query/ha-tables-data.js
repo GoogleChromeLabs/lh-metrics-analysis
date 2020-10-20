@@ -214,6 +214,23 @@ export default class HaTablesData {
   }
 
   /**
+   * A convenience method that returns the HTTP Archive table matching the given
+   * date, or `null` if no such table exists.
+   * @param {{year: number, month: number}} date
+   * @return {Promise<LhrTableInfo|null>}
+   */
+  async getTableWithDate({year, month}) {
+    const tablesData = await this._getTablesData();
+
+    const tableInfo = tablesData.find(candidate => {
+      const {year: candidateYear, month: candidateMonth} = getTableDate(candidate.tableId);
+      return year === candidateYear && month === candidateMonth;
+    });
+
+    return tableInfo || null;
+  }
+
+  /**
    * Returns the table one month before the given table, or null if one doesn't
    * exist. Month is assumed to be in [1, 12], not [0, 11] as is usual in JS
    * dates.
@@ -226,19 +243,14 @@ export default class HaTablesData {
       throw new Error(`${lhrTableInfo.tableId} not a known table. Where did you get that?`);
     }
 
-    let {month: earlierMonth, year: earlierYear} = getTableDate(lhrTableInfo.tableId);
-    earlierMonth -= 1;
-    if (earlierMonth === 0) {
-      earlierMonth = 12;
-      earlierYear -= 1;
+    let {month, year} = getTableDate(lhrTableInfo.tableId);
+    month -= 1;
+    if (month === 0) {
+      month = 12;
+      year -= 1;
     }
 
-    const earlierInfo = tablesData.find(choice => {
-      const {month, year} = getTableDate(choice.tableId);
-      return year === earlierYear && month === earlierMonth;
-    });
-
-    return earlierInfo || null;
+    return this.getTableWithDate({year, month});
   }
 
   /**
@@ -253,14 +265,10 @@ export default class HaTablesData {
       throw new Error(`${lhrTableInfo.tableId} not a known table. Where did you get that?`);
     }
 
-    let {month: earlierMonth, year: earlierYear} = getTableDate(lhrTableInfo.tableId);
-    earlierYear -= 1;
+    let {month, year} = getTableDate(lhrTableInfo.tableId);
+    year -= 1;
 
-    const earlierInfo = tablesData.find(choice => {
-      const {month, year} = getTableDate(choice.tableId);
-      return year === earlierYear && month === earlierMonth;
-    });
-    return earlierInfo || null;
+    return this.getTableWithDate({year, month});
   }
 }
 

@@ -247,7 +247,7 @@ describe('Extraction from HTTP Archive tables', () => {
       });
 
       describe('reuse and replacement of existing tables', function() {
-        this.timeout(10_000);
+        this.timeout(20_000);
 
         /**
          * Get metadata for an already-extracted HA table.
@@ -326,10 +326,10 @@ describe('Extraction from HTTP Archive tables', () => {
         });
 
         it('deletes and reextracts a new table if the schema has changed', async () => {
-          // First table in test set (and HTTP Archive).
-          const firstDate = {year: 2017, month: 6};
-          const firstTableId = `2017_06_01_mobile`;
-          const {existingTable, existingMetadata} = await getTableAndMetadata(firstTableId);
+          // Second table in test set (let's not hit per-table quota limits).
+          const secondDate = {year: 2017, month: 8};
+          const secondTableId = `2017_08_01_mobile`;
+          const {existingTable, existingMetadata} = await getTableAndMetadata(secondTableId);
 
           // Add an unexpected column to the existing table.
           const {schema} = existingMetadata;
@@ -337,10 +337,10 @@ describe('Extraction from HTTP Archive tables', () => {
           schema.fields.push({name: 'not_a_likely_column', type: 'FLOAT'});
           await existingTable.setMetadata(existingMetadata);
 
-          // Extract again from a fresh version of the first HA table.
+          // Extract again from a fresh version of the second HA table.
           const freshHaTablesData = new HaTablesData(extractedDataset, testSourceDataset);
-          const firstTableInfo = await getTableInfo(freshHaTablesData, firstDate);
-          const extractedFirstTable = await extractMetricsFromLhrTable(firstTableInfo);
+          const secondTableInfo = await getTableInfo(freshHaTablesData, secondDate);
+          const extractedFirstTable = await extractMetricsFromLhrTable(secondTableInfo);
           const [newMetadata] = await extractedFirstTable.getMetadata();
 
           // Table should be recreated, so creationTime should be new.
@@ -353,7 +353,7 @@ describe('Extraction from HTTP Archive tables', () => {
         });
 
         it('deletes and reextracts a new table if the existing one is empty', async () => {
-          // Second table in test set (let's not hit per-table quota limits).
+          // Second table in test set.
           const secondDate = {year: 2017, month: 8};
           const secondTableId = `2017_08_01_mobile`;
           const {existingTable, existingMetadata} = await getTableAndMetadata(secondTableId);
