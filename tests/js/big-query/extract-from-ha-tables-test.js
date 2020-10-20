@@ -273,15 +273,11 @@ describe('Extraction from HTTP Archive tables', () => {
          * Retrieves the LhrTableInfo for the HTTP Archive table matching the
          * given date.
          * @param {HaTablesData} haTablesData
-         * @param {{year: number, month: number}} tableInfo
+         * @param {{year: number, month: number}} tableDate
          * @return {Promise<LhrTableInfo>}
          */
-        async function getTableInfo(haTablesData, {year, month}) {
-          const tables = await haTablesData.getListOfTables();
-          const firstMatchInfo = tables.find(candidate => {
-            const {month: candidateMonth, year: candidateYear} = getTableDate(candidate.tableId);
-            return candidateYear === year && candidateMonth === month;
-          });
+        async function getTableInfo(haTablesData, tableDate) {
+          const firstMatchInfo = await haTablesData.getTableWithDate(tableDate);
           assert.ok(firstMatchInfo);
           return firstMatchInfo;
         }

@@ -152,6 +152,19 @@ describe('HaTablesData', () => {
     });
   });
 
+  describe('#getTableWithDate', () => {
+    it('returns the table with the given date', async () => {
+      const august2020TableInfo = await haTablesData.getTableWithDate({year: 2020, month: 8});
+      assert.ok(august2020TableInfo);
+      assert.strictEqual(august2020TableInfo.tableId, '2020_08_01_mobile');
+    });
+
+    it('returns null if no table exists for that date', async () => {
+      const august2525TableInfo = await haTablesData.getTableWithDate({year: 2525, month: 8});
+      assert.strictEqual(august2525TableInfo, null);
+    });
+  });
+
   describe('#getMonthBefore', () => {
     it('can return the table a month before a given table', async () => {
       const tables = await haTablesData.getListOfTables();
@@ -196,13 +209,8 @@ describe('HaTablesData', () => {
 
   describe('#getYearBefore', () => {
     it('can return the table a year before a given table', async () => {
-      const tables = await haTablesData.getListOfTables();
-
       const startYear = 2020;
-      let currentYearTable = tables.find(t => {
-        const {year, month} = getTableDate(t.tableId);
-        return year === startYear && month === 7;
-      });
+      let currentYearTable = await haTablesData.getTableWithDate({year: startYear, month: 7});
 
       for (let i = 0; i < 3; i++) {
         // Assertion inside loop to keep tsc 3.9.3 happy.
