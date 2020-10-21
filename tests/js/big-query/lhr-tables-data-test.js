@@ -25,6 +25,7 @@ const {BigQuery} = BQModule;
 import {
   createLhrTableInfo,
   addExtractedToLhrTable,
+  assertValidLhrTableInfo,
 } from '../../../js/big-query/lhr-tables-data.js';
 import HaTablesData from '../../../js/big-query/ha-tables-data.js';
 import credentials from '../../../js/big-query/auth/credentials.js';
@@ -195,6 +196,94 @@ describe('LhrTablesData', () => {
 
         assert.ok(!tableInfo.extractedTable, 'an `extractedTable` was added to the table');
       });
+    });
+  });
+
+  describe('assertValidLhrTableInfo', () => {
+    const sourceTableId = 'test_table';
+    const sourceDataset = {
+      projectId: 'lh-metrics-analysis',
+      datasetId: extractedDatasetId, // Fine, we're not actually doing anything with this.
+    };
+
+    it('passes for a valid lhrTableInfo', () => {
+      const lhrTableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
+      assertValidLhrTableInfo(lhrTableInfo);
+      assert.ok(true);
+    });
+
+    it('passes for a valid lhrTableInfo with a real extractedTable added', () => {
+      const lhrTableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
+
+      // Actual BQ table is never created, this is just a local object.
+      const tmpExtractedTable = extractedDataset.table(lhrTableInfo.extractedTableId);
+      addExtractedToLhrTable(lhrTableInfo, tmpExtractedTable);
+
+      assertValidLhrTableInfo(lhrTableInfo);
+      assert.ok(true);
+    });
+
+    it('throws for an invalid tableId', () => {
+      const lhrTableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
+      // @ts-expect-error - writing to readonly property for test.
+      lhrTableInfo.tableId = '----';
+      assert.throws(() => assertValidLhrTableInfo(lhrTableInfo),
+          /^Error: invalid BigQuery id '----'$/);
+    });
+
+    it('throws for an invalid extractedTableId', () => {
+      const lhrTableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
+      // @ts-expect-error - writing to readonly property for test.
+      lhrTableInfo.extractedTableId = '&&&';
+      assert.throws(() => assertValidLhrTableInfo(lhrTableInfo),
+          /^Error: invalid BigQuery id '&&&'$/);
+    });
+
+    it('throws for an invalid source projectId', () => {
+      const lhrTableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
+      // @ts-expect-error - writing to readonly property for test.
+      lhrTableInfo.sourceDataset.projectId = '0bad0';
+      assert.throws(() => assertValidLhrTableInfo(lhrTableInfo),
+          /^Error: invalid GCloud project id '0bad0'$/);
+    });
+
+    it('throws for an invalid source datasetId', () => {
+      const lhrTableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
+      // @ts-expect-error - writing to readonly property for test.
+      lhrTableInfo.sourceDataset.datasetId = '%__%';
+      assert.throws(() => assertValidLhrTableInfo(lhrTableInfo),
+          /^Error: invalid BigQuery id '%__%'$/);
+    });
+
+    it('throws if extractedTable.id does not match real extractedTableId', () => {
+      const lhrTableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
+
+      // Actual BQ table is never created, this is just a local object.
+      const tmpExtractedTable = extractedDataset.table('valid_but_nonsense_id');
+
+      // Manually setting table. Don't do this!
+      // @ts-expect-error - writing to readonly property for test.
+      lhrTableInfo.extractedTable = tmpExtractedTable;
+
+      assert.throws(() => assertValidLhrTableInfo(lhrTableInfo),
+          // eslint-disable-next-line max-len
+          /^Error: extractedTable 'valid_but_nonsense_id' did not match expected id 'lh_extract_test_lh_extract_test_table'$/);
+    });
+
+    it('throws if extractedTableId does not match real extractedTable.id', () => {
+      const lhrTableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
+
+      // Actual BQ table is never created, this is just a local object.
+      const tmpExtractedTable = extractedDataset.table(lhrTableInfo.extractedTableId);
+      addExtractedToLhrTable(lhrTableInfo, tmpExtractedTable);
+
+      // Override real extractedTableId.
+      // @ts-expect-error - writing to readonly property for test.
+      lhrTableInfo.extractedTableId = 'valid_id_but_not_the_real_deal';
+
+      assert.throws(() => assertValidLhrTableInfo(lhrTableInfo),
+          // eslint-disable-next-line max-len
+          /^Error: extractedTable 'lh_extract_test_lh_extract_test_table' did not match expected id 'valid_id_but_not_the_real_deal'$/);
     });
   });
 });

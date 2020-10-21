@@ -247,7 +247,7 @@ describe('Extraction from HTTP Archive tables', () => {
       });
 
       describe('reuse and replacement of existing tables', function() {
-        this.timeout(20_000);
+        this.timeout(30_000);
 
         /**
          * Get metadata for an already-extracted HA table.
@@ -302,6 +302,8 @@ describe('Extraction from HTTP Archive tables', () => {
         });
 
         it('reuses a table if already extracted, even from a fresh LhrTableInfo', async () => {
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Slow down for rate limiting.
+
           // First table in test set (and HTTP Archive).
           const firstDate = {year: 2017, month: 6};
 
@@ -322,6 +324,8 @@ describe('Extraction from HTTP Archive tables', () => {
         });
 
         it('deletes and reextracts a new table if the schema has changed', async () => {
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Slow down for rate limiting.
+
           // Second table in test set (let's not hit per-table quota limits).
           const secondDate = {year: 2017, month: 8};
           const secondTableId = `2017_08_01_mobile`;
@@ -349,6 +353,8 @@ describe('Extraction from HTTP Archive tables', () => {
         });
 
         it('deletes and reextracts a new table if the existing one is empty', async () => {
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Slow down for rate limiting.
+
           // Second table in test set.
           const secondDate = {year: 2017, month: 8};
           const secondTableId = `2017_08_01_mobile`;
