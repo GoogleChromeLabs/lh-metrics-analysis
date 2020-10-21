@@ -336,8 +336,8 @@ describe('Extraction from HTTP Archive tables', () => {
           // Extract again from a fresh version of the second HA table.
           const freshHaTablesData = new HaTablesData(extractedDataset, testSourceDataset);
           const secondTableInfo = await getTableInfo(freshHaTablesData, secondDate);
-          const extractedFirstTable = await extractMetricsFromLhrTable(secondTableInfo);
-          const [newMetadata] = await extractedFirstTable.getMetadata();
+          const extractedSecondTable = await extractMetricsFromLhrTable(secondTableInfo);
+          const [newMetadata] = await extractedSecondTable.getMetadata();
 
           // Table should be recreated, so creationTime should be new.
           assert.notStrictEqual(newMetadata.creationTime, existingMetadata.creationTime);
