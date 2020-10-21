@@ -16,8 +16,9 @@
 
 import {getTotalRows} from '../big-query/extract-from-ha-tables.js';
 import {fetchUniqueValueCounts} from '../big-query/fetch-from-extracted-tables.js';
+import {getTableDate} from '../big-query/ha-tables-data.js';
 
-/** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
+/** @typedef {import('../types/externs').LhrTableInfo} LhrTableInfo */
 
 /**
  * @param {Array<string|number>} arr
@@ -42,7 +43,7 @@ function formatCompact(value) {
 }
 
 /**
- * @param {HaTableInfo} tableInfo
+ * @param {LhrTableInfo} tableInfo
  * @return {Promise<{summary: string, warning?: string}>}
  */
 async function getLighthouseVersionsSummary(tableInfo) {
@@ -65,7 +66,7 @@ async function getLighthouseVersionsSummary(tableInfo) {
 }
 
 /**
- * @param {HaTableInfo} tableInfo
+ * @param {LhrTableInfo} tableInfo
  * @return {Promise<{summary: string, warning?: string}>}
  */
 async function getChromeVersionsSummary(tableInfo) {
@@ -88,7 +89,7 @@ async function getChromeVersionsSummary(tableInfo) {
 }
 
 /**
- * @param {HaTableInfo} tableInfo
+ * @param {LhrTableInfo} tableInfo
  * @param {number} totalRows
  * @return {Promise<{summary: string, warning?: string}>}
  */
@@ -112,7 +113,7 @@ async function getErrorRateSummary(tableInfo, totalRows) {
 
 /**
  * TODO(bckenny): extend null perf scores back to pre 3.0.
- * @param {HaTableInfo} tableInfo
+ * @param {LhrTableInfo} tableInfo
  * @param {number} totalRows
  * @return {Promise<{summary: string, warning?: string}>}
  */
@@ -133,7 +134,7 @@ async function getNullPerfSummary(tableInfo, totalRows) {
 
 /**
  * Write a summary of the given table.
- * @param {HaTableInfo|null} tableInfo
+ * @param {LhrTableInfo|null} tableInfo
  * @param {string} description
  * @return {Promise<string>}
  */
@@ -142,7 +143,7 @@ async function getSingleTableSummary(tableInfo, description) {
     return `**no ${description} table found**\n`;
   }
 
-  const {year, month} = tableInfo;
+  const {year, month} = getTableDate(tableInfo.tableId);
   const date = new Date(year, month - 1, 1);
   const monthName = date.toLocaleString(undefined, {month: 'long'});
 
@@ -167,8 +168,8 @@ async function getSingleTableSummary(tableInfo, description) {
  * be compared against it. A compare table can be `null` if one doesn't exist
  * but it's still worth including in the summary (e.g. there is no
  * `2018_06_01_mobile` table but it's worth calling out its absence).
- * @param {{tableInfo: HaTableInfo, description: string}} baseTable
- * @param  {...{tableInfo: HaTableInfo|null, description: string}} compareTables
+ * @param {{tableInfo: LhrTableInfo, description: string}} baseTable
+ * @param  {...{tableInfo: LhrTableInfo|null, description: string}} compareTables
  * @return {Promise<string>}
  */
 async function getTableSummarySection(baseTable, ...compareTables) {

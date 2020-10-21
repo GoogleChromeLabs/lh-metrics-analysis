@@ -24,7 +24,7 @@ import BQModule from '@google-cloud/bigquery';
 const {BigQuery} = BQModule;
 
 import credentials from '../big-query/auth/credentials.js';
-import HaTablesData from '../big-query/ha-tables-data.js';
+import HaTablesData, {getTableDate} from '../big-query/ha-tables-data.js';
 import {PROJECT_ROOT} from '../module-utils.js';
 import {getTableSummarySection} from './tables-summary.js';
 import {fetchPairedTablesMetric} from '../big-query/fetch-from-extracted-tables.js';
@@ -38,7 +38,7 @@ import {execFile} from 'child_process';
 const execFileAsync = promisify(execFile);
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
-/** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
+/** @typedef {import('../types/externs').LhrTableInfo} LhrTableInfo */
 /** @typedef {import('../big-query/extract-from-ha-tables.js').MetricValueId} MetricValueId */
 
 const PLOT_SIZE = 600;
@@ -47,18 +47,21 @@ const concurrentMapper = new ConcurrentMapper(concurrencyLimit);
 
 /**
  * Get the written name of the table's month.
- * @param {HaTableInfo} tableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  */
-function getMonthName({year, month}) {
+function getMonthName(lhrTableInfo) {
+  const {year, month} = getTableDate(lhrTableInfo.tableId);
   const date = new Date(year, month - 1, 1);
   return date.toLocaleString(undefined, {month: 'long'});
 }
 
 /**
  * Get a short written name of the table's month.
- * @param {HaTableInfo} tableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  */
-function getShortMonthName({month}) {
+function getShortMonthName(lhrTableInfo) {
+  const {month} = getTableDate(lhrTableInfo.tableId);
+
   // The `toLocaleString({month: 'short'})` names can be dumb, so do it manually.
   const monthNames = [
     'Jan',
@@ -91,8 +94,8 @@ function getImageTag(imageFilename, outPath, altText, width = PLOT_SIZE, height 
 }
 
 /**
- * @param {HaTableInfo} baseTableInfo
- * @param {HaTableInfo} compareTableInfo
+ * @param {LhrTableInfo} baseTableInfo
+ * @param {LhrTableInfo} compareTableInfo
  * @param {string} outPath
  * @param {string} description
  * @param {ConcurrentMapper} concurrentMapper
@@ -102,8 +105,10 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, 
     concurrentMapper) {
   const {filename, numRows} = await fetchPairedTablesMetric(baseTableInfo, compareTableInfo,
       'performance_score');
-  const baseName = `${getMonthName(baseTableInfo)} ${baseTableInfo.year}`;
-  const compareName = `${getMonthName(compareTableInfo)} ${compareTableInfo.year}`;
+  const {year: baseYear} = getTableDate(baseTableInfo.tableId);
+  const baseName = `${getMonthName(baseTableInfo)} ${baseYear}`;
+  const {year: compareYear} = getTableDate(baseTableInfo.tableId);
+  const compareName = `${getMonthName(compareTableInfo)} ${compareYear}`;
 
   const shiftResults = await concurrentMapper.pooledCall(getShiftFunctionDeciles,
       filename, {quiet: false});
@@ -115,7 +120,7 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, 
 
   const shiftImageName = `${outPath}/` +
       // eslint-disable-next-line max-len
-      `shift-performance-score-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}.png`;
+      `shift-performance-score-${baseYear}-${getMonthName(baseTableInfo)}-${compareYear}-${getMonthName(compareTableInfo)}.png`;
 
   const command = 'Rscript';
   const shiftArgs = [
@@ -123,8 +128,8 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, 
     filename,
     shiftImageName,
     '--metric-name="Performance Score"',
-    '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
-    '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
+    '-b', `"${getShortMonthName(baseTableInfo)} ${baseYear}"`,
+    '-c', `"${getShortMonthName(compareTableInfo)} ${compareYear}"`,
     '--label-multiplier=100',
     '--include-percentage=100',
   ];
@@ -141,14 +146,14 @@ async function getPerfScoreComparison(baseTableInfo, compareTableInfo, outPath, 
 
   const quantilesImageName = `${outPath}/` +
       // eslint-disable-next-line max-len
-      `diff-performance-score-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}.png`;
+      `diff-performance-score-${baseYear}-${getMonthName(baseTableInfo)}-${compareYear}-${getMonthName(compareTableInfo)}.png`;
   const quantileArgs = [
     'R/plot-difference-deciles-bin.R',
     filename,
     quantilesImageName,
     '--metric-name="Performance"',
-    '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
-    '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
+    '-b', `"${getShortMonthName(baseTableInfo)} ${baseYear}"`,
+    '-c', `"${getShortMonthName(compareTableInfo)} ${compareYear}"`,
     '--label-multiplier=100',
     '--include-percentage=99',
   ];
@@ -229,8 +234,8 @@ const metricDisplayOptions = {
 };
 
 /**
- * @param {HaTableInfo} baseTableInfo
- * @param {HaTableInfo} compareTableInfo
+ * @param {LhrTableInfo} baseTableInfo
+ * @param {LhrTableInfo} compareTableInfo
  * @param {MetricValueId} metricValueId
  * @param {string} outPath
  * @param {string} comparisonDescription
@@ -242,8 +247,10 @@ async function getMetricValueComparison(baseTableInfo, compareTableInfo, metricV
   const {filename, numRows} = await fetchPairedTablesMetric(baseTableInfo, compareTableInfo,
       metricValueId);
 
-  const baseName = `${getMonthName(baseTableInfo)} ${baseTableInfo.year}`;
-  const compareName = `${getMonthName(compareTableInfo)} ${compareTableInfo.year}`;
+  const {year: baseYear} = getTableDate(baseTableInfo.tableId);
+  const baseName = `${getMonthName(baseTableInfo)} ${baseYear}`;
+  const {year: compareYear} = getTableDate(baseTableInfo.tableId);
+  const compareName = `${getMonthName(compareTableInfo)} ${compareYear}`;
   const metricOptions = metricDisplayOptions[metricValueId];
   const heading = `### ${baseName} vs ${compareName} (${comparisonDescription})`;
 
@@ -266,7 +273,7 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
 
   const shiftImageName = `${outPath}/` +
       // eslint-disable-next-line max-len
-      `shift-${metricValueId}-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}.png`;
+      `shift-${metricValueId}-${baseYear}-${getMonthName(baseTableInfo)}-${compareYear}-${getMonthName(compareTableInfo)}.png`;
 
   // TODO(bckenny): print stderr from Rscript.
   const command = 'Rscript';
@@ -275,8 +282,8 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
     filename,
     shiftImageName,
     `--metric-name="${metricOptions.plotTitle}"`,
-    '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
-    '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
+    '-b', `"${getShortMonthName(baseTableInfo)} ${baseYear}"`,
+    '-c', `"${getShortMonthName(compareTableInfo)} ${compareYear}"`,
     '--reverse-diff-colors', // For metrics, positive difference means it regressed in `compare`.
     `--digits=${metricOptions.digits}`,
   ];
@@ -303,14 +310,14 @@ ${metricOptions.plotTitle} data was not collected in ${baseName}.
 
   const quantilesImageName = `${outPath}/` +
       // eslint-disable-next-line max-len
-      `diff-${metricValueId}-${baseTableInfo.year}-${getMonthName(baseTableInfo)}-${compareTableInfo.year}-${getMonthName(compareTableInfo)}.png`;
+      `diff-${metricValueId}-${baseYear}-${getMonthName(baseTableInfo)}-${compareYear}-${getMonthName(compareTableInfo)}.png`;
   const quantileArgs = [
     'R/plot-difference-deciles-bin.R',
     filename,
     quantilesImageName,
     `--metric-name="${metricOptions.plotTitle}"`,
-    '-b', `"${getShortMonthName(baseTableInfo)} ${baseTableInfo.year}"`,
-    '-c', `"${getShortMonthName(compareTableInfo)} ${compareTableInfo.year}"`,
+    '-b', `"${getShortMonthName(baseTableInfo)} ${baseYear}"`,
+    '-c', `"${getShortMonthName(compareTableInfo)} ${compareYear}"`,
   ];
   // r/docopt doesn't handle an empty string value, for some reason,
   // so only add unit if there is one.
@@ -343,10 +350,11 @@ ${quantileTable}`;
 }
 
 /**
- * @param {HaTableInfo} tableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  * @return {string}
  */
-function getTitle({year, month}) {
+function getTitle(lhrTableInfo) {
+  const {year, month} = getTableDate(lhrTableInfo.tableId);
   const date = new Date(year, month - 1, 1);
   const monthName = date.toLocaleString(undefined, {month: 'long'});
   return `# Analysis of HTTP Archive Lighthouse results, ${monthName} ${year} `;
@@ -358,13 +366,12 @@ async function run() {
 
   const haTablesData = new HaTablesData(extractedDataset);
   const latestTable = await haTablesData.getLatestTable();
-  // HACK: using two months prior:
-  const actualLastMonth = await haTablesData.getMonthBefore(latestTable);
-  const lastMonth = await haTablesData.getMonthBefore(actualLastMonth);
+  const lastMonth = await haTablesData.getMonthBefore(latestTable);
   const lastYear = await haTablesData.getYearBefore(latestTable);
 
-  const paddedMonth = String(latestTable.month).padStart(2, '0');
-  const outDirname = `${PROJECT_ROOT}/reports/metrics/${latestTable.year}-${paddedMonth}`;
+  const {year: latestYear, month: latestMonth} = getTableDate(latestTable.tableId);
+  const paddedMonth = String(latestMonth).padStart(2, '0');
+  const outDirname = `${PROJECT_ROOT}/reports/metrics/${latestYear}-${paddedMonth}`;
   fs.mkdirSync(outDirname, {recursive: true});
 
   // For now, we're just overwriting everything in the directory.
