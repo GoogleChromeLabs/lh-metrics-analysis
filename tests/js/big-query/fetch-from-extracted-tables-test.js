@@ -34,16 +34,16 @@ import {
   getPairedSaveFilename,
   fetchUniqueValueCounts,
 } from '../../../js/big-query/fetch-from-extracted-tables.js';
-import {extractMetricsFromHaLhrs} from '../../../js/big-query/extract-from-ha-tables.js';
+import {extractMetricsFromLhrTable} from '../../../js/big-query/extract-from-ha-tables.js';
 import {PROJECT_ROOT} from '../../../js/module-utils.js';
 
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
-/** @typedef {import('../../../js/types/externs').HaTableInfo} HaTableInfo */
+/** @typedef {import('../../../js/types/externs').LhrTableInfo} LhrTableInfo */
 
 // Source tables for test.
 const testSourceDataset = {
-  haProjectId: 'lh-metrics-analysis',
-  haDatasetId: 'test_lighthouse',
+  projectId: 'lh-metrics-analysis',
+  datasetId: 'test_lighthouse',
 };
 // Extracted dataset for test.
 const extractedDatasetId = 'test_lh_extract';
@@ -67,20 +67,19 @@ describe('Fetching from extracted metrics tables', () => {
   const extractedDataset = bigQuery.dataset(extractedDatasetId);
   const haTablesData = new HaTablesData(extractedDataset, testSourceDataset);
 
-  /** @type {HaTableInfo} */
+  /** @type {LhrTableInfo} */
   let may2020TableInfo;
-  /** @type {HaTableInfo} */
+  /** @type {LhrTableInfo} */
   let aug2017TableInfo;
 
   before('initialize ha tables data', async function() {
     // First request to BQ can take a while, so give it a bit.
-    this.timeout(20_000);
+    this.timeout(30_000);
 
-    const tables = await haTablesData.getListOfTables();
-    const probMay2020Info = tables.find(table => table.year === 2020 && table.month === 5);
+    const probMay2020Info = await haTablesData.getTableWithDate({year: 2020, month: 5});
     assert.ok(probMay2020Info);
     may2020TableInfo = probMay2020Info;
-    const probAug2017Info = tables.find(table => table.year === 2017 && table.month === 8);
+    const probAug2017Info = await haTablesData.getTableWithDate({year: 2017, month: 8});
     assert.ok(probAug2017Info);
     aug2017TableInfo = probAug2017Info;
   });
@@ -91,21 +90,47 @@ describe('Fetching from extracted metrics tables', () => {
     const compareEtag = 'VYhpX9WIVt9DxtvnnUGzKw==';
 
     describe('#getSingleSaveFilename', () => {
-      it('creates a valid save file name for a metric from a single table', () => {
+      it('creates a valid save file name for a metric from a single HA table', () => {
         const filename = getSingleSaveFilename(metricValueId, may2020TableInfo, baseEtag);
         const relativeFilename = path.relative(PROJECT_ROOT, filename);
         assert.strictEqual(relativeFilename,
             'data/lcp_value/2020-05.Mr%2FvppV23GU9WmV9RALG7Yg%3D%3D.csv');
       });
 
-      it('throws for invalid dates', () => {
-        const badMonthInfo = {...may2020TableInfo, month: -1};
-        assert.throws(() => getSingleSaveFilename(metricValueId, badMonthInfo, baseEtag),
-          /^Error: Invalid.+month -1$/);
+      it('creates a valid save file name for a metric from a single arbitrary table', () => {
+        const customIdInfo = {...may2020TableInfo, tableId: 'some_valid_table_id'};
+        const filename = getSingleSaveFilename(metricValueId, customIdInfo, baseEtag);
+        const relativeFilename = path.relative(PROJECT_ROOT, filename);
+        assert.strictEqual(relativeFilename,
+            // eslint-disable-next-line max-len
+            'data/lcp_value/lh-metrics-analysis-test-lighthouse-some-valid-table-id.Mr%2FvppV23GU9WmV9RALG7Yg%3D%3D.csv');
+      });
 
-        const badYearInfo = {...may2020TableInfo, year: 2525.25};
+      it('throws for invalid httpArchiveTable dates', () => {
+        const badMonthInfo = {...may2020TableInfo, tableId: '2020_32_01_mobile'};
+        assert.throws(() => getSingleSaveFilename(metricValueId, badMonthInfo, baseEtag),
+          /^Error: Invalid.+month 32$/);
+
+        const badYearInfo = {...may2020TableInfo, tableId: '2525_05_01_mobile'};
         assert.throws(() => getSingleSaveFilename(metricValueId, badYearInfo, baseEtag),
-            /^Error: Invalid.+year 2525.25$/);
+            /^Error: Invalid.+year 2525$/);
+      });
+
+      it('throws for invalid fully-qualified table IDs', () => {
+        const badTableIdInfo = {...may2020TableInfo, tableId: '----'};
+        assert.throws(() => getSingleSaveFilename(metricValueId, badTableIdInfo, baseEtag),
+          /^Error: invalid BigQuery id '----'$/);
+
+        const badProjectInfo = {
+          ...may2020TableInfo,
+          tableId: 'some_valid_table_id', // custom tableId to move off HA template.
+          sourceDataset: {
+            projectId: '$$',
+            datasetId: 'a',
+          },
+        };
+        assert.throws(() => getSingleSaveFilename(metricValueId, badProjectInfo, baseEtag),
+            /^Error: invalid GCloud project id '\$\$'$/);
       });
 
       it('throws for short etags', () => {
@@ -128,7 +153,7 @@ describe('Fetching from extracted metrics tables', () => {
     });
 
     describe('#getPairedSaveFilename', () => {
-      it('creates a valid save file name for a metric from paired tables', () => {
+      it('creates a valid save file name for a metric from paired HA tables', () => {
         const filename = getPairedSaveFilename(metricValueId, may2020TableInfo, baseEtag,
             aug2017TableInfo, compareEtag);
         const relativeFilename = path.relative(PROJECT_ROOT, filename);
@@ -136,22 +161,60 @@ describe('Fetching from extracted metrics tables', () => {
             'data/lcp_value/paired-2020-05-to-2017-08.Mr%2FvppV23GU9WmV9RALG7Yg%3D%3D-VYhpX9WIVt9DxtvnnUGzKw%3D%3D.csv'); // eslint-disable-line max-len
       });
 
-      it('throws for invalid table months', () => {
-        const badBaseMonthInfo = {...may2020TableInfo, month: 0};
+      it('creates a valid save file name for a metric from paired arbitrary tables', () => {
+        const baseInfo = {...may2020TableInfo, tableId: 'some_valid_table_id'};
+        const compareInfo = {...aug2017TableInfo, tableId: 'another_table_id'};
+        const filename = getPairedSaveFilename(metricValueId, baseInfo, baseEtag, compareInfo,
+            compareEtag);
+        const relativeFilename = path.relative(PROJECT_ROOT, filename);
+        assert.strictEqual(relativeFilename,
+            // eslint-disable-next-line max-len
+            'data/lcp_value/paired-lh-metrics-analysis-test-lighthouse-some-valid-table-id-to-lh-metrics-analysis-test-lighthouse-another-table-id.Mr%2FvppV23GU9WmV9RALG7Yg%3D%3D-VYhpX9WIVt9DxtvnnUGzKw%3D%3D.csv');
+      });
+
+      it('creates a valid save file name for a metric from paired arbitrary and HA tables', () => {
+        const baseInfo = {...may2020TableInfo, tableId: 'some_valid_table_id'};
+        const filename = getPairedSaveFilename(metricValueId, baseInfo, baseEtag, aug2017TableInfo,
+            compareEtag);
+        const relativeFilename = path.relative(PROJECT_ROOT, filename);
+        assert.strictEqual(relativeFilename,
+            // eslint-disable-next-line max-len
+            'data/lcp_value/paired-lh-metrics-analysis-test-lighthouse-some-valid-table-id-to-2017-08.Mr%2FvppV23GU9WmV9RALG7Yg%3D%3D-VYhpX9WIVt9DxtvnnUGzKw%3D%3D.csv');
+      });
+
+      it('throws for invalid httpArchiveTable months', () => {
+        const badBaseMonthInfo = {...may2020TableInfo, tableId: '2020_00_01_mobile'};
         assert.throws(() => getPairedSaveFilename(metricValueId, badBaseMonthInfo, baseEtag,
             aug2017TableInfo, compareEtag), /^Error: Invalid.+month 0$/);
-        const badCompareMonthInfo = {...aug2017TableInfo, month: 13};
+        const badCompareMonthInfo = {...aug2017TableInfo, tableId: '2017_13_01_mobile'};
         assert.throws(() => getPairedSaveFilename(metricValueId, may2020TableInfo, baseEtag,
             badCompareMonthInfo, compareEtag), /^Error: Invalid.+month 13$/);
       });
 
-      it('throws for invalid table years', () => {
-        const badBaseYearInfo = {...may2020TableInfo, year: -1};
+      it('throws for invalid httpArchiveTable years', () => {
+        const badBaseYearInfo = {...may2020TableInfo, tableId: '0000_05_01_mobile'};
         assert.throws(() => getPairedSaveFilename(metricValueId, badBaseYearInfo, baseEtag,
-            aug2017TableInfo, compareEtag), /^Error: Invalid.+year -1$/);
-        const badCompareYearInfo = {...aug2017TableInfo, year: 2020.44};
+            aug2017TableInfo, compareEtag), /^Error: Invalid.+year 0$/);
+        const badCompareYearInfo = {...aug2017TableInfo, tableId: '2525_08_01_mobile'};
         assert.throws(() => getPairedSaveFilename(metricValueId, may2020TableInfo, baseEtag,
-            badCompareYearInfo, compareEtag), /^Error: Invalid.+year 2020.44$/);
+            badCompareYearInfo, compareEtag), /^Error: Invalid.+year 2525$/);
+      });
+
+      it('throws for invalid fully-qualified table IDs', () => {
+        const badTableIdInfo = {...may2020TableInfo, tableId: '----'};
+        assert.throws(() => getPairedSaveFilename(metricValueId, badTableIdInfo, baseEtag,
+            aug2017TableInfo, compareEtag), /^Error: invalid BigQuery id '----'$/);
+
+        const badProjectInfo = {
+          ...may2020TableInfo,
+          tableId: 'some_valid_table_id', // custom tableId to move off HA template.
+          sourceDataset: {
+            projectId: 'something',
+            datasetId: '%%%',
+          },
+        };
+        assert.throws(() => getPairedSaveFilename(metricValueId, may2020TableInfo, baseEtag,
+            badProjectInfo, compareEtag), /^Error: invalid BigQuery id '%%%'$/);
       });
 
       it('throws for short etags', () => {
@@ -184,7 +247,7 @@ describe('Fetching from extracted metrics tables', () => {
   });
 
   describe('Fetching', function() {
-    this.timeout(20_000);
+    this.timeout(30_000);
 
     const preservedConsoleWarn = console.warn;
 
@@ -243,7 +306,7 @@ describe('Fetching from extracted metrics tables', () => {
       // Dependent on above test being run first.
       it('should use the same filename as #getSingleSaveFilename', async () => {
         // This should come from tableInfo since it will have just been extracted by the above.
-        const extractedTable = await extractMetricsFromHaLhrs(may2020TableInfo);
+        const extractedTable = await extractMetricsFromLhrTable(may2020TableInfo);
 
         // Get where it should have been saved.
         const [{etag}] = await extractedTable.getMetadata();
@@ -290,7 +353,7 @@ describe('Fetching from extracted metrics tables', () => {
     describe('#fetchPairedTablesMetric', () => {
       const metricValueId = 'fcp_value';
       const pairedCsvValues = 'base,compare\n1566.807,2085.854\n';
-      /** @type {HaTableInfo} */
+      /** @type {LhrTableInfo} */
       let july2018TableInfo;
 
       /** @type {string|undefined} */
@@ -309,8 +372,7 @@ describe('Fetching from extracted metrics tables', () => {
       });
 
       it('downloads a metric from a pair of tables', async () => {
-        const tables = await haTablesData.getListOfTables();
-        const probjuly2018Info = tables.find(table => table.year === 2018 && table.month === 7);
+        const probjuly2018Info = await haTablesData.getTableWithDate({year: 2018, month: 7});
         assert.ok(probjuly2018Info);
         july2018TableInfo = probjuly2018Info;
 
@@ -328,8 +390,8 @@ describe('Fetching from extracted metrics tables', () => {
       // Dependent on above test being run first.
       it('should use the same filename as #getPairedSaveFilename', async () => {
         // These should come from tableInfo since they will have just been extracted by the above.
-        const extractedBaseTable = await extractMetricsFromHaLhrs(aug2017TableInfo);
-        const extractedCompareTable = await extractMetricsFromHaLhrs(july2018TableInfo);
+        const extractedBaseTable = await extractMetricsFromLhrTable(aug2017TableInfo);
+        const extractedCompareTable = await extractMetricsFromLhrTable(july2018TableInfo);
 
         // Get where it should have been saved.
         const [{etag: baseEtag}] = await extractedBaseTable.getMetadata();
@@ -416,14 +478,13 @@ describe('Fetching from extracted metrics tables', () => {
         }, /^Error: invalid characters in BigQuery column name \('Robert'\); DROP TABLE Students; --'\)$/);
       });
 
-      it('throws if fetching from an invalid year', async () => {
-        /** @type {HaTableInfo} */
-        const tableInfo = {...may2020TableInfo, year: 2525};
+      it('throws if fetching from an invalid extractedTableId', async () => {
+        const tableInfo = {...may2020TableInfo, extractedTableId: '----'};
 
         await assert.rejects(async () => {
           return fetchUniqueValueCounts(tableInfo, 'chrome_version');
         // eslint-disable-next-line max-len
-        }, /^Error: Invalid HTTP Archive run year 2525$/);
+        }, /^Error: invalid BigQuery id '----'$/);
       });
     });
   });

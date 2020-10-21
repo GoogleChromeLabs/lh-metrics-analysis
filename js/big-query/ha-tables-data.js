@@ -24,11 +24,17 @@ import {assertValidProjectId, assertValidBigQueryId} from './bq-utils.js';
 
 /** @typedef {import('@google-cloud/bigquery').BigQuery} BigQuery */
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
-/** @typedef {import('@google-cloud/bigquery').Table} Table */
-/** @typedef {import('../types/externs').HaTableInfo} HaTableInfo */
 
-const DEFAULT_HA_PROJECT_ID = 'httparchive';
-const DEFAULT_HA_DATASET_ID = 'lighthouse';
+/** @typedef {import('../types/externs').LhrTableInfo} LhrTableInfo */
+
+const DEFAULT_HA_SOURCE_PROJECT_ID = 'httparchive';
+const DEFAULT_HA_SOURCE_DATASET_ID = 'lighthouse';
+
+/**
+ * Regex matching the normal HTTP Archive table ID. Useful for extracting the
+ * month and day of the HTTP Archive run.
+ */
+const tableIdExtractor = /^(?<year>\d{4})_(?<month>\d{2})_\d\d_mobile$/;
 
 /**
  * Asserts valid year for HTTP Archive tables (though a table with this year may
@@ -54,11 +60,36 @@ export function assertValidMonth(month) {
 }
 
 /**
- * Returns a standard extracted table ID for the given date. Month is
- * assumed to be in [1, 12], not [0, 11] as is usual in JS dates.
- * @param {{year: number, month: number}} tableInfo
+ * Extracts the year and month from the given HTTP Archive tableId.
+ * @param {string} tableId
+ * @return {{year: number, month: number}}
  */
-export function getExtractedTableId({year, month}) {
+export function getTableDate(tableId) {
+  const result = tableIdExtractor.exec(tableId);
+  if (result === null || !result.groups) throw new Error(`Invalid HA table name ${tableId}`);
+  const year = Number.parseInt(result.groups.year);
+  const month = Number.parseInt(result.groups.month);
+
+  return {year, month};
+}
+
+/**
+ * Returns whether the given table info is probably sourced from an HTTP Archive
+ * run. If named similarly enough, may give a false positive result.
+ * @param {LhrTableInfo} lhrTableInfo
+ * @return {boolean}
+ */
+export function isHttpArchiveTable(lhrTableInfo) {
+  return tableIdExtractor.test(lhrTableInfo.tableId);
+}
+
+/**
+ * Returns a standard extracted table ID for the given HTTP Archive tableId.
+ * @param {string} tableId
+ * @return {string}
+ */
+export function getExtractedTableId(tableId) {
+  const {year, month} = getTableDate(tableId);
   assertValidYear(year);
   assertValidMonth(month);
 
@@ -70,7 +101,7 @@ export default class HaTablesData {
   /**
    * The list of available HTTP Archive tables, sorted chronologically, starting
    * with the most recent (or null, if they haven't been fetched yet).
-   * @type {Array<HaTableInfo>|null}
+   * @type {Array<LhrTableInfo>|null}
    * @private
    */
   _tablesData = null;
@@ -82,7 +113,7 @@ export default class HaTablesData {
   _bigQuery;
 
   /**
-   * @type {HaTableInfo['sourceDataset']}
+   * @type {LhrTableInfo['sourceDataset']}
    * @private
    */
   _sourceDataset;
@@ -102,7 +133,7 @@ export default class HaTablesData {
    * By default these are extracted from the official `httparchive.lighthouse.*`
    * tables, but this can be overriden via `sourceDataset`.
    * @param {Dataset} extractedDataset
-   * @param {HaTableInfo['sourceDataset']} [sourceDataset]
+   * @param {LhrTableInfo['sourceDataset']} [sourceDataset]
    */
   constructor(extractedDataset, sourceDataset) {
     this._extractedDataset = extractedDataset;
@@ -111,56 +142,27 @@ export default class HaTablesData {
   }
 
   /**
-   * Do some basic, local checks that `extractedTable` is the extracted form of
-   * `tableInfo`, then break `HaTableInfo` readonlyness and add `extractedTable`
-   * to `tableInfo`.
-   * @param {HaTableInfo} tableInfo
-   * @param {Table} extractedTable
-   */
-  static addExtractedTable(tableInfo, extractedTable) {
-    // Checks are a little strict until there's a need for relaxing them.
-    // For now, don't allow re-adding a table. Check first next time.
-    if (tableInfo.extractedTable) {
-      throw new Error('tableInfo already has an `extractedTable`');
-    }
-
-    // Require creating by the same dataset JS instance, not just same BQ dataset.
-    if (extractedTable.dataset !== tableInfo.extractedDataset) {
-      throw new Error('`extractedTable` from a different dataset than the one in `tableInfo`');
-    }
-
-    const expectedExtractedId = getExtractedTableId(tableInfo);
-    if (expectedExtractedId !== extractedTable.id) {
-      // eslint-disable-next-line max-len
-      throw new Error(`extractedTable '${extractedTable.id}' did not match expected id '${expectedExtractedId}'`);
-    }
-
-    // @ts-expect-error - break readonly to add `extractedTable`.
-    tableInfo.extractedTable = extractedTable;
-  }
-
-  /**
    * Get the default HTTP Archive project and dataset IDs, unless overridden.
    * Also asserts that the source IDs are valid so any typos can fail as early
    * as possible.
-   * @param {Partial<HaTableInfo['sourceDataset']>} [options]
-   * @return {HaTableInfo['sourceDataset']}
+   * @param {Partial<LhrTableInfo['sourceDataset']>} [sourceOptions]
+   * @return {LhrTableInfo['sourceDataset']}
    * @private
    */
-  _initAndCheckSourceDataset(options = {}) {
-    const haProjectId = options.haProjectId ?? DEFAULT_HA_PROJECT_ID;
-    const haDatasetId = options.haDatasetId ?? DEFAULT_HA_DATASET_ID;
+  _initAndCheckSourceDataset(sourceOptions = {}) {
+    const projectId = sourceOptions.projectId ?? DEFAULT_HA_SOURCE_PROJECT_ID;
+    const datasetId = sourceOptions.datasetId ?? DEFAULT_HA_SOURCE_DATASET_ID;
 
-    assertValidProjectId(haProjectId);
-    assertValidBigQueryId(haDatasetId);
+    assertValidProjectId(projectId);
+    assertValidBigQueryId(datasetId);
 
-    return {haProjectId, haDatasetId};
+    return {projectId, datasetId};
   }
 
   /**
    * Retrieve available HTTP Archive run tables, sorted chronologically starting
    * with the most recent.
-   * @return {Promise<Array<HaTableInfo>>}
+   * @return {Promise<Array<LhrTableInfo>>}
    * @private
    */
   async _getTablesData() {
@@ -175,20 +177,14 @@ export default class HaTablesData {
       .sort().reverse()
       // And map to tableInfo objects.
       .map(tableId => {
-        const result = /(?<year>\d{4})_(?<month>\d{2})/.exec(tableId);
-        if (result === null || !result.groups) throw new Error(`Invalid HA table name ${tableId}`);
-
-        const year = Number.parseInt(result.groups.year);
-        const month = Number.parseInt(result.groups.month);
-        const {haProjectId, haDatasetId} = this._sourceDataset;
+        const {projectId, datasetId} = this._sourceDataset;
 
         return {
-          year,
-          month,
           tableId,
+          extractedTableId: getExtractedTableId(tableId),
           sourceDataset: {
-            haProjectId,
-            haDatasetId,
+            projectId,
+            datasetId,
           },
           extractedDataset: this._extractedDataset,
         };
@@ -200,7 +196,7 @@ export default class HaTablesData {
   /**
    * Retrieve available HTTP Archive run tables, sorted chronologically starting
    * with the most recent.
-   * @return {Promise<Array<HaTableInfo>>}
+   * @return {Promise<Array<LhrTableInfo>>}
    */
   async getListOfTables() {
     const tablesData = await this._getTablesData();
@@ -208,8 +204,9 @@ export default class HaTablesData {
   }
 
   /**
-   * A convenience method that returns the most recent tableInfo available.
-   * @return {Promise<HaTableInfo>}
+   * A convenience method that returns the most recent HTTP Archive table
+   * available.
+   * @return {Promise<LhrTableInfo>}
    */
   async getLatestTable() {
     const tablesData = await this._getTablesData();
@@ -217,49 +214,61 @@ export default class HaTablesData {
   }
 
   /**
-   * Returns the tableInfo one month before the given tableInfo, or null if one
-   * doesn't exist. Month is assumed to be in [1, 12], not [0, 11] as is usual in
-   * JS dates.
-   * @param {HaTableInfo} tableInfo
-   * @return {Promise<HaTableInfo|null>}
+   * A convenience method that returns the HTTP Archive table matching the given
+   * date, or `null` if no such table exists.
+   * @param {{year: number, month: number}} date
+   * @return {Promise<LhrTableInfo|null>}
    */
-  async getMonthBefore(tableInfo) {
+  async getTableWithDate({year, month}) {
     const tablesData = await this._getTablesData();
-    if (!tablesData.includes(tableInfo)) {
-      throw new Error(`${tableInfo.tableId} not in known tables. Where did you get that?`);
-    }
 
-    let {month: earlierMonth, year: earlierYear} = tableInfo;
-    earlierMonth -= 1;
-    if (earlierMonth === 0) {
-      earlierMonth = 12;
-      earlierYear -= 1;
-    }
+    const tableInfo = tablesData.find(candidate => {
+      const {year: candidateYear, month: candidateMonth} = getTableDate(candidate.tableId);
+      return year === candidateYear && month === candidateMonth;
+    });
 
-    const earlierInfo = tablesData
-      .find(choice => choice.year === earlierYear && choice.month === earlierMonth);
-
-    return earlierInfo || null;
+    return tableInfo || null;
   }
 
   /**
-   * Returns the tableInfo one year before the given tableInfo, or null if one
-   * doesn't exist.
-   * @param {HaTableInfo} tableInfo
-   * @return {Promise<HaTableInfo|null>}
+   * Returns the table one month before the given table, or null if one doesn't
+   * exist. Month is assumed to be in [1, 12], not [0, 11] as is usual in JS
+   * dates.
+   * @param {LhrTableInfo} lhrTableInfo
+   * @return {Promise<LhrTableInfo|null>}
    */
-  async getYearBefore(tableInfo) {
+  async getMonthBefore(lhrTableInfo) {
     const tablesData = await this._getTablesData();
-    if (!tablesData.includes(tableInfo)) {
-      throw new Error(`${tableInfo.tableId} not in known tables. Where did you get that?`);
+    if (!tablesData.includes(lhrTableInfo)) {
+      throw new Error(`${lhrTableInfo.tableId} not a known table. Where did you get that?`);
     }
 
-    let {month: earlierMonth, year: earlierYear} = tableInfo;
-    earlierYear -= 1;
+    let {month, year} = getTableDate(lhrTableInfo.tableId);
+    month -= 1;
+    if (month === 0) {
+      month = 12;
+      year -= 1;
+    }
 
-    const earlierInfo = tablesData
-      .find(choice => choice.year === earlierYear && choice.month === earlierMonth);
-    return earlierInfo || null;
+    return this.getTableWithDate({year, month});
+  }
+
+  /**
+   * Returns the table one year before the given table, or null if one doesn't
+   * exist.
+   * @param {LhrTableInfo} lhrTableInfo
+   * @return {Promise<LhrTableInfo|null>}
+   */
+  async getYearBefore(lhrTableInfo) {
+    const tablesData = await this._getTablesData();
+    if (!tablesData.includes(lhrTableInfo)) {
+      throw new Error(`${lhrTableInfo.tableId} not a known table. Where did you get that?`);
+    }
+
+    let {month, year} = getTableDate(lhrTableInfo.tableId);
+    year -= 1;
+
+    return this.getTableWithDate({year, month});
   }
 }
 
@@ -268,15 +277,15 @@ export default class HaTablesData {
  * Currently does not return the old half-month tables (e.g. only
  * returns `2018_02_01_mobile`, not `2018_02_15_mobile`).
  * @param {BigQuery} bigQuery
- * @param {HaTableInfo['sourceDataset']} source
+ * @param {LhrTableInfo['sourceDataset']} source
  * @return {Promise<Array<string>>}
  */
-async function getAvailableHaTableIds(bigQuery, {haProjectId, haDatasetId}) {
-  assertValidProjectId(haProjectId);
-  assertValidBigQueryId(haDatasetId);
+async function getAvailableHaTableIds(bigQuery, {projectId, datasetId}) {
+  assertValidProjectId(projectId);
+  assertValidBigQueryId(datasetId);
 
   const tableQuery = `SELECT table_id
-    FROM \`${haProjectId}.${haDatasetId}.__TABLES__\`
+    FROM \`${projectId}.${datasetId}.__TABLES__\`
     WHERE ENDS_WITH(table_id, 'mobile')`;
 
   const [tables] = await bigQuery.query({

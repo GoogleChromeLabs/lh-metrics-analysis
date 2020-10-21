@@ -19,29 +19,30 @@
 import {Dataset, Table} from '@google-cloud/bigquery';
 
 // Can't do readonly and document each property in jsdoc.
+// Note: 'Info' is used as a suffix to differentiate from the BigQuery client library `Table` type.
 /**
- * Indexing data about a table available in the HTTP Archive dataset.
+ * Indexing data about a raw-LHR-containing table (such as a table in the HTTP
+ * Archive dataset). The only requirement is that the table have a `report`
+ * string column containing stringified LHRs. 
  */
-export type HaTableInfo = {
-  /** The year the table was generated. */
-  readonly year: number;
-  /** The month the table was generated. In the range [1, 12], *not* [0, 11] as is usual in JS dates. */
-  readonly month: number;
+export interface LhrTableInfo {
   /** The id of the table in the source dataset. */
   readonly tableId: string;
+  /** The id of the table once extracted. */
+  readonly extractedTableId: string;
   /**
    * The source BigQuery project and dataset. Usually the HTTP Archive, but can
    * be overridden for testing or to use another dataset of LHRs. Only strings
    * because only query permissions required, not project or write access.
    */
   readonly sourceDataset: {
-    /** The HTTP Archive project ID to query. */
-    readonly haProjectId: string;
-    /** The HTTP Archive dataset ID to query. */
-    readonly haDatasetId: string;
+    /** The project ID to query (e.g. `httparchive`). */
+    readonly projectId: string;
+    /** The dataset ID to query (e.g. `lighthouse`). */
+    readonly datasetId: string;
   };
   /** The dataset of the extracted form of this table or where that table will be created. */
   readonly extractedDataset: Dataset;
   /** The extracted form of this table, or `undefined` if it hasn't been queried or created yet. */
   readonly extractedTable?: Table;
-};
+}

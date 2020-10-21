@@ -34,7 +34,7 @@ import credentials from '../../js/big-query/auth/credentials.js';
 
 /** @typedef {import('@google-cloud/bigquery').Table} Table */
 /** @typedef {import('@google-cloud/bigquery').Dataset} Dataset */
-/** @typedef {import('../../js/types/externs').HaTableInfo} HaTableInfo */
+/** @typedef {import('../../js/types/externs').LhrTableInfo} LhrTableInfo */
 
 // Tables mirror `httparchive.lighthouse` but in the test dataset.
 const TEST_DATASET_ID = 'test_lighthouse';
@@ -71,11 +71,11 @@ function getTestTableVersionQuery(tableId) {
  * Goal is to give a small number of LHRs (as few as 2 for Lighthouse < 3.2.0)
  * to make sure extraction queries handle the varieties of LHR states per version
  * and as versions have evolved over time.
- * @param {HaTableInfo} haTableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  * @return {string}
  */
-function getSamplingQuery(haTableInfo) {
-  const {tableId} = haTableInfo;
+function getSamplingQuery(lhrTableInfo) {
+  const {tableId} = lhrTableInfo;
   assertSafeTableId(tableId);
 
   /* eslint-disable max-len */
@@ -119,15 +119,15 @@ function getSamplingQuery(haTableInfo) {
 /**
  * Sample the given table's LHRs and save them to a table for testing.
  * @param {Dataset} testDataset
- * @param {HaTableInfo} haTableInfo
+ * @param {LhrTableInfo} lhrTableInfo
  * @return {Promise<Table>}
  */
-async function createTestTable(testDataset, haTableInfo) {
+async function createTestTable(testDataset, lhrTableInfo) {
   // Table id is the same HTTP Archive id but in the test dataset.
-  const testTable = testDataset.table(haTableInfo.tableId);
+  const testTable = testDataset.table(lhrTableInfo.tableId);
 
-  console.warn(`Sampling LHRs from ${haTableInfo.tableId} and saving to test table...`);
-  const samplingQuery = getSamplingQuery(haTableInfo);
+  console.warn(`Sampling LHRs from ${lhrTableInfo.tableId} and saving to test table...`);
+  const samplingQuery = getSamplingQuery(lhrTableInfo);
   const [samplingJob] = await testDataset.bigQuery.createQueryJob({
     query: samplingQuery,
 
@@ -173,7 +173,7 @@ async function getExistingTestTableIds(testDataset) {
 
 /**
  * @param {Dataset} testDataset
- * @return {Promise<HaTableInfo>}
+ * @return {Promise<LhrTableInfo>}
  */
 async function selectHaTable(testDataset) {
   const haTablesData = new HaTablesData(testDataset);
