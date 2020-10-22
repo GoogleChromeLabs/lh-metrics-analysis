@@ -201,7 +201,7 @@ async function calculateQuantiles(absolutePath, quantileOptions) {
   const csvEndTime = performance.now();
 
   const quantilesStartTime = performance.now();
-  const quantiles = await quantilesPbci(columns, quantileOptions);
+  const quantiles = quantilesPbci(columns, quantileOptions);
   const quantilesEndTime = performance.now();
 
   if (!quantileOptions.quiet) {
@@ -375,5 +375,5 @@ export {
 // @ts-expect-error - we can use import.meta without `--module=esnext`.
 if (esMain(import.meta)) {
   /* c8 ignore next 2 */
-  run();
+  run(); // eslint-disable-line @typescript-eslint/no-floating-promises
 }

@@ -294,5 +294,5 @@ async function getAvailableHaTableIds(bigQuery, {projectId, datasetId}) {
 
   return tables
     .map(t => t.table_id)
-    .filter(id => !id.endsWith('15_mobile'));
+    .filter(id => typeof id === 'string' && !id.endsWith('15_mobile'));
 }

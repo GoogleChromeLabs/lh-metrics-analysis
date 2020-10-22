@@ -71,7 +71,7 @@ function getCacheFiles(pathname) {
   const dirname = path.dirname(pathname);
   const needle = /^quantiles-pbci(?:-\d{4}-\d{2}-to-\d{4}-\d{2})?\.[a-f0-9]*\.csv$/;
   const cacheFiles = fs.readdirSync(dirname)
-      .filter(filename => filename.match(needle));
+      .filter(filename => needle.exec(filename));
 
   return cacheFiles;
 }

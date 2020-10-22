@@ -73,4 +73,4 @@ async function run() {
   }
 }
 
-run();
+run(); // eslint-disable-line @typescript-eslint/no-floating-promises

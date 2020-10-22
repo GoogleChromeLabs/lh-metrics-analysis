@@ -21,15 +21,33 @@ module.exports = {
   ignorePatterns: ['!.github', '**/dist/'],
   // start with google standard style
   //     https://github.com/google/eslint-config-google/blob/master/index.js
-  extends: ['eslint:recommended', 'google'],
-  // plugins: ['eslint-plugin-local-rules'], // include custom rules
+  extends: [
+    'eslint:recommended',
+    'google',
+    // 'plugin:@typescript-eslint/recommended',
+    // 'plugin:@typescript-eslint/recommended-requiring-type-checking',
+  ],
+  plugins: [
+    '@typescript-eslint',
+  ],
   env: {
     node: true,
     es6: true,
   },
-  // Required as of 2020 to support import.meta.url in node.
-  // See https://github.com/eslint/eslint/issues/13133
-  parser: 'babel-eslint',
+  // Use the typescript parser for stage 3 syntax and type support.
+  parser: '@typescript-eslint/parser',
+  parserOptions: {
+    ecmaVersion: 2020,
+    extraFileExtensions: ['.cjs'],
+    ecmaFeatures: {
+      globalReturn: true,
+      jsx: false,
+    },
+    sourceType: 'module',
+    tsconfigRootDir: __dirname,
+    project: ['./tsconfig.eslint.json'],
+    warnOnUnsupportedTypeScriptVersion: false,
+  },
 
   rules: {
     // 2 == error, 1 == warning, 0 == off
@@ -85,8 +103,57 @@ module.exports = {
     'operator-linebreak': [2, 'after'],
     'arrow-parens': [2, 'as-needed'],
 
-    // Custom lighthouse rules
-    // 'local-rules/require-file-extension': 2,
+    // From @typescript-eslint/recommended-requiring-type-checking, but without
+    // disabling eslint-recommended rules.
+    '@typescript-eslint/await-thenable': 2,
+    '@typescript-eslint/no-floating-promises': 2,
+    '@typescript-eslint/no-for-in-array': 2,
+    '@typescript-eslint/no-implied-eval': 2,
+    '@typescript-eslint/no-misused-promises': 2,
+    // '@typescript-eslint/no-unsafe-assignment': 2,
+    '@typescript-eslint/no-unsafe-call': 2,
+    // '@typescript-eslint/no-unsafe-member-access': 2,
+    // '@typescript-eslint/no-unsafe-return': 2,
+    '@typescript-eslint/prefer-regexp-exec': 2,
+    'require-await': 'off',
+    '@typescript-eslint/require-await': 2,
+    // '@typescript-eslint/restrict-plus-operands': 2,
+    // '@typescript-eslint/restrict-template-expressions': 2,
+    '@typescript-eslint/unbound-method': 2,
+
+    // Could be good for jsdoc, but unclear if it's doing anything.
+    '@typescript-eslint/no-unnecessary-type-assertion': 2,
+    '@typescript-eslint/no-inferrable-types': 2, // Could be nice for jsdoc tpes.
+
+    // Definitely isn't using jsdoc.
+    // '@typescript-eslint/explicit-module-boundary-types': 1,
+
+    // These are mostly @typescript-eslint/recommended, but without disabling
+    // eslint-recommended rules.
+    // see https://github.com/typescript-eslint/typescript-eslint/blob/e01204931e460f5e6731abc443c88d666ca0b07a/packages/eslint-plugin/src/configs/recommended.ts
+    '@typescript-eslint/adjacent-overload-signatures': 2,
+    '@typescript-eslint/ban-ts-comment': 2,
+    '@typescript-eslint/ban-types': 2,
+    'no-array-constructor': 0, // Not needed?
+    '@typescript-eslint/no-array-constructor': 2,
+    'no-empty-function': 0, // Not needed?
+    '@typescript-eslint/no-empty-function': 2,
+    '@typescript-eslint/no-empty-interface': 2,
+    '@typescript-eslint/no-explicit-any': 1,
+    '@typescript-eslint/no-extra-non-null-assertion': 2,
+    // 'no-extra-semi': 0,
+    // '@typescript-eslint/no-extra-semi': 2, // Not needed? seems ok even with class properties
+    '@typescript-eslint/no-misused-new': 2,
+    '@typescript-eslint/no-namespace': 2,
+    '@typescript-eslint/no-non-null-asserted-optional-chain': 2,
+    '@typescript-eslint/no-non-null-assertion': 2,
+    '@typescript-eslint/no-this-alias': 2,
+    // 'no-unused-vars': 0,
+    // '@typescript-eslint/no-unused-vars': 2, // Seems unnecessary?
+    '@typescript-eslint/no-var-requires': 2,
+    '@typescript-eslint/prefer-as-const': 2,
+    '@typescript-eslint/prefer-namespace-keyword': 2,
+    '@typescript-eslint/triple-slash-reference': 2,
 
     // Disabled rules
     'require-jsdoc': 0,
@@ -97,13 +164,5 @@ module.exports = {
       // stdout (console.log) will have to be explicitly opted into.
       allow: ['warn', 'error'],
     }],
-  },
-  parserOptions: {
-    ecmaVersion: 2020,
-    ecmaFeatures: {
-      globalReturn: true,
-      jsx: false,
-    },
-    sourceType: 'module',
   },
 };

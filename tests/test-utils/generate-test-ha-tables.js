@@ -221,4 +221,4 @@ process.on('unhandledRejection', err => {
   throw err;
 });
 
-run();
+run(); // eslint-disable-line @typescript-eslint/no-floating-promises

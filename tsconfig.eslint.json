@@ -1,0 +1,21 @@
+// A config just for linting, so all files are linted, whether type checked or not.
+// See: https://github.com/typescript-eslint/typescript-eslint/blob/e01204931e460f5e6731abc443c88d666ca0b07a/docs/getting-started/linting/MONOREPO.md#one-root-tsconfigjson
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true,
+  },
+  "include": [
+    "./.eslintrc.cjs",
+    "./**/*.js",
+    "./**/*.d.ts",
+    ".github/**/*.js",
+  ],
+  "exclude": [
+    "node_modules",
+    "coverage",
+    "data",
+    ".github/**/dist/*.js" // .github built files.
+  ]
+}

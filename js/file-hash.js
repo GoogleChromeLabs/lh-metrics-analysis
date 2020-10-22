@@ -61,6 +61,7 @@ async function getFileHash(filePath, addendum = '') {
   const hash = crypto.createHash('md5');
 
   await pipeline(inputStream, appendStream, hash);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   return hash.read().toString('hex');
 }
 

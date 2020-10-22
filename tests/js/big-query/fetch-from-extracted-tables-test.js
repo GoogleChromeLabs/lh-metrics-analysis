@@ -255,6 +255,7 @@ describe('Fetching from extracted metrics tables', () => {
       await assertEmptyDataset(extractedDataset);
 
       // Silence console during test.
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       console.warn = () => {};
     });
 

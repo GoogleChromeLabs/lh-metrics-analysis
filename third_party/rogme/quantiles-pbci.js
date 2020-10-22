@@ -40,9 +40,9 @@ function getRandomInt(rng, max) {
  * NOTE: confidence intervals are *not* corrected for mulitple comparisons.
  * @param {{compare: Array<number>, base: Array<number>}} data
  * @param {{nboot: number, quiet?: boolean, randomSeed?: [number, number, number, number]}} options
- * @return {Promise<Array<DifferenceQuantile>>}
+ * @return {Array<DifferenceQuantile>}
  */
-async function quantilesPbci({compare, base}, {nboot, quiet, randomSeed}) {
+function quantilesPbci({compare, base}, {nboot, quiet, randomSeed}) {
   if (compare.length !== base.length) {
     throw new Error('dependent `base` and `compare` must have the same length');
   }
@@ -62,7 +62,7 @@ async function quantilesPbci({compare, base}, {nboot, quiet, randomSeed}) {
   const hdWeightsByDecile = getHarrellDavisDecileWeights(length);
 
   const rng = randomSeed ? new xorshift.constructor(randomSeed) : xorshift;
-  const confidenceIntervalsByDecile = await bootstrapConfidenceIntervalPerQuantile(differences,
+  const confidenceIntervalsByDecile = bootstrapConfidenceIntervalPerQuantile(differences,
       hdWeightsByDecile, nboot, rng, quiet);
 
   differences.sort((a, b) => a - b);
@@ -99,9 +99,9 @@ async function quantilesPbci({compare, base}, {nboot, quiet, randomSeed}) {
  * @param {number} nboot
  * @param {xorshift} rng
  * @param {boolean} [quiet]
- * @return {Promise<Array<{low: number, up: number}>>}
+ * @return {Array<{low: number, up: number}>}
  */
-async function bootstrapConfidenceIntervalPerQuantile(data, hdWeightsByQuantile, nboot, rng,
+function bootstrapConfidenceIntervalPerQuantile(data, hdWeightsByQuantile, nboot, rng,
     quiet) {
   const numberOfQuantiles = hdWeightsByQuantile.length;
   const bootstrapResultsPool = new ArrayBuffer(numberOfQuantiles * nboot *

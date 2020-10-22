@@ -135,7 +135,7 @@ describe('Extraction from HTTP Archive tables', () => {
       });
     });
 
-    describe('lhr extraction (slow start while extracting)', async () => {
+    describe('lhr extraction (slow start while extracting)', () => {
       const preservedConsoleWarn = console.warn;
 
       /**
@@ -158,6 +158,7 @@ describe('Extraction from HTTP Archive tables', () => {
           throw new Error('Re-run `generate-test-ha-tables.js` to get an up-to-date test table');
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
         console.warn = () => {};
 
         // ensure it starts with an empty dataset.

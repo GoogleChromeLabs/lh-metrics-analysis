@@ -206,7 +206,7 @@ async function calculateShift(absolutePath, shiftOptions) {
   const csvEndTime = performance.now();
 
   const shiftStartTime = performance.now();
-  const shift = await shiftdhd(columns, shiftOptions);
+  const shift = shiftdhd(columns, shiftOptions);
   const shiftEndTime = performance.now();
 
   if (!shiftOptions.quiet) {
@@ -380,5 +380,5 @@ export {
 // @ts-expect-error - we can use import.meta without `--module=esnext`.
 if (esMain(import.meta)) {
   /* c8 ignore next 2 */
-  run();
+  run(); // eslint-disable-line @typescript-eslint/no-floating-promises
 }

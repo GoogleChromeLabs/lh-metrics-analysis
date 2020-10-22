@@ -147,8 +147,9 @@ async function getCsvRowCount(filename) {
   const readStream = fs.createReadStream(filename, {encoding: 'utf-8'});
   let count = 0;
   for await (const chunk of readStream) {
-    for (let i = 0; i < chunk.length; i++) {
-      if (chunk.charCodeAt(i) === 10) { // '\n'
+    const strChunk = /** @type {string} */ (chunk);
+    for (let i = 0; i < strChunk.length; i++) {
+      if (strChunk.charCodeAt(i) === 10) { // '\n'
         count++;
       }
     }

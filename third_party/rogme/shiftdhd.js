@@ -38,9 +38,9 @@ function getRandomInt(rng, max) {
  * bootstrapping. Otherwise, a random seed is chosen on every run.
  * @param {{compare: Array<number>, base: Array<number>}} data
  * @param {{nboot: number, quiet?: boolean, randomSeed?: [number, number, number, number]}} options
- * @return {Promise<Array<ShiftQuantile>>}
+ * @return {Array<ShiftQuantile>}
  */
-async function shiftdhd({compare: compareInput, base: baseInput}, {nboot, quiet, randomSeed}) {
+function shiftdhd({compare: compareInput, base: baseInput}, {nboot, quiet, randomSeed}) {
   if (compareInput.length !== baseInput.length) {
     throw new Error('dependent `base` and `compare` must have the same length');
   }
@@ -62,7 +62,7 @@ async function shiftdhd({compare: compareInput, base: baseInput}, {nboot, quiet,
   const crit = 37 / Math.pow(length, 1.4) + 2.75;
 
   const rng = randomSeed ? new xorshift.constructor(randomSeed) : xorshift;
-  const standardErrors = await bootstrapDependentDiffStdDevPerQuantile(compare, base,
+  const standardErrors = bootstrapDependentDiffStdDevPerQuantile(compare, base,
       hdWeightsByDecile, nboot, rng, quiet);
 
   compare.sort((a, b) => a - b);
@@ -102,9 +102,9 @@ async function shiftdhd({compare: compareInput, base: baseInput}, {nboot, quiet,
  * @param {number} nboot
  * @param {xorshift} rng
  * @param {boolean} [quiet]
- * @return {Promise<Array<number>>}
+ * @return {Array<number>}
  */
-async function bootstrapDependentDiffStdDevPerQuantile(compare, base, hdWeightsByQuantile,
+function bootstrapDependentDiffStdDevPerQuantile(compare, base, hdWeightsByQuantile,
     nboot, rng, quiet) {
   const numberOfQuantiles = hdWeightsByQuantile.length;
   const variancesByQuantile = [];

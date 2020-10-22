@@ -145,7 +145,7 @@ describe('LhrTablesData', () => {
         datasetId: extractedDatasetId, // Fine, we're not actually doing anything with this.
       };
 
-      it('can add an extracted table to a tableInfo', async function() {
+      it('can add an extracted table to a tableInfo', () => {
         const tableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
 
         // Actual BQ table is never created, this is just a local object.
@@ -156,7 +156,7 @@ describe('LhrTablesData', () => {
         assert.strictEqual(tableInfo.extractedTable, tmpExtractedTable);
       });
 
-      it('throws if an extractedTable has already been added', async () => {
+      it('throws if an extractedTable has already been added', () => {
         const tableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
         // Actual BQ table is never created, this is just a local object.
         const tmpExtractedTable = extractedDataset.table(tableInfo.extractedTableId);
@@ -168,7 +168,7 @@ describe('LhrTablesData', () => {
         }, /^Error: tableInfo already has an `extractedTable`$/);
       });
 
-      it('throws if extractedTable was created with a different dataset', async () => {
+      it('throws if extractedTable was created with a different dataset', () => {
         const tableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
 
         // Actual BQ dataset and table are never created, these are just local objects.
@@ -182,7 +182,7 @@ describe('LhrTablesData', () => {
         assert.ok(!tableInfo.extractedTable, 'an `extractedTable` was added to the table');
       });
 
-      it('throws if extractedTable tableId is different than expected', async function() {
+      it('throws if extractedTable tableId is different than expected', () => {
         const tableInfo = createLhrTableInfo(sourceTableId, sourceDataset, extractedDataset);
 
         // Actual BQ table is never created, this is just a local object.
