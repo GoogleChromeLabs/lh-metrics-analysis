@@ -23,7 +23,7 @@ Service accounts should be given the minimum permissions needed. For more about 
 
 ---
 
-## Monthly reports on HTTP Archive Lighthouse results
+## [Monthly reports on HTTP Archive Lighthouse results](https://github.com/GoogleChromeLabs/lh-metrics-analysis/tree/gh-pages/reports/monthly#repo-content-pjax-container)
 
 ### 2020
 - [**July 2020**](https://github.com/GoogleChromeLabs/lh-metrics-analysis/blob/gh-pages/reports/monthly/2020-07/report.md)
