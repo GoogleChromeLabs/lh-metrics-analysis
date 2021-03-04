@@ -20,3 +20,19 @@ To be able to run the tests:
 - consider limiting the BigQuery quota to the test account, just in case, though this may require creating a separate Cloud project used only for testing.
 
 Service accounts should be given the minimum permissions needed. For more about the service account roles, see the [BigQuery predefined roles docs](https://cloud.google.com/bigquery/docs/access-control#bigquery).
+
+---
+
+## [Monthly reports on HTTP Archive Lighthouse results](https://github.com/GoogleChromeLabs/lh-metrics-analysis/tree/gh-pages/reports/monthly#repo-content-pjax-container)
+
+### 2020
+- [**July 2020**](https://github.com/GoogleChromeLabs/lh-metrics-analysis/blob/gh-pages/reports/monthly/2020-07/report.md)
+- [**August 2020**](https://github.com/GoogleChromeLabs/lh-metrics-analysis/blob/gh-pages/reports/monthly/2020-08/report.md)
+- [**September 2020**](https://github.com/GoogleChromeLabs/lh-metrics-analysis/blob/gh-pages/reports/monthly/2020-09/report.md)
+- [**October 2020**](https://github.com/GoogleChromeLabs/lh-metrics-analysis/blob/gh-pages/reports/monthly/2020-10/report.md)
+- [**November 2020**](https://github.com/GoogleChromeLabs/lh-metrics-analysis/blob/gh-pages/reports/monthly/2020-11/report.md)
+- [**December 2020**](https://github.com/GoogleChromeLabs/lh-metrics-analysis/blob/gh-pages/reports/monthly/2020-12/report.md)
+
+### 2021
+- [**January 2021**](https://github.com/GoogleChromeLabs/lh-metrics-analysis/blob/gh-pages/reports/monthly/2021-01/report.md)
+- [**February 2021**](https://github.com/GoogleChromeLabs/lh-metrics-analysis/blob/gh-pages/reports/monthly/2021-02/report.md)
