@@ -137,6 +137,13 @@ const expectations = {
     {lh_version: '5.6.0', requested_url: 'https://www.jovenesweb.com/', final_url: 'https://www.jovenesweb.com/', runtime_error_code: null, chrome_version: '81.0.4044', performance_score: 0.36, fcp_value: 2501.414, fmp_value: 2501.414, lcp_value: 6363, mpfid_value: 527.044, si_value: 8047, tbt_value: 3292.267000000001, tti_value: 11746.96, cls_value: null},
     {lh_version: '5.6.0', requested_url: 'https://www.placasonline.com.br/', final_url: 'https://www.placasonline.com.br/', runtime_error_code: 'ERRORED_DOCUMENT_REQUEST', chrome_version: '81.0.4044', performance_score: null, fcp_value: null, fmp_value: null, lcp_value: null, mpfid_value: null, si_value: null, tbt_value: null, tti_value: null, cls_value: null},
   ],
+
+  '2021_01_01_mobile': [
+    {lh_version: '7.0.0', requested_url: 'http://cidiomas.uaslp.mx/', final_url: 'http://cidiomas.uaslp.mx/', runtime_error_code: 'PROTOCOL_TIMEOUT', chrome_version: '87.0.4280', performance_score: 0.54, fcp_value: 4471.591, fmp_value: 4471.591, lcp_value: 4471.591, mpfid_value: 397.938, si_value: 5530, tbt_value: 286.46299999999883, tti_value: 10393.322, cls_value: 0.13241398705376517},
+    {lh_version: '7.0.0', requested_url: 'http://www.holytrinityparish.net/', final_url: 'http://www.holytrinityparish.net/', runtime_error_code: 'NO_FCP', chrome_version: '87.0.4280', performance_score: null, fcp_value: null, fmp_value: null, lcp_value: null, mpfid_value: null, si_value: null, tbt_value: null, tti_value: null, cls_value: null},
+    {lh_version: '7.0.0', requested_url: 'https://derspoekenkieker.de/', final_url: 'https://derspoekenkieker.de/', runtime_error_code: null, chrome_version: '87.0.4280', performance_score: null, fcp_value: 3872.527, fmp_value: 3872.527, lcp_value: 11155.569, mpfid_value: 447.101, si_value: 6928, tbt_value: null, tti_value: null, cls_value: 0.2403537326388889},
+    {lh_version: '7.0.0', requested_url: 'https://forum.httrack.com/', final_url: 'https://forum.httrack.com/', runtime_error_code: null, chrome_version: '87.0.4280', performance_score: 0.92, fcp_value: 2108.098, fmp_value: 3974.69, lcp_value: 2474.75, mpfid_value: 79.544, si_value: 3397, tbt_value: 33.947999999999865, tti_value: 4691.065, cls_value: 0.00018602130404568652},
+  ],
 };
 
 export default expectations;
